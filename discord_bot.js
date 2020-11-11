@@ -84,9 +84,19 @@ robot.on('voiceStateUpdate', async (oldState, newState) => {
     let newUserChannel = newState.channelID;
     let oldUserChannel = oldState.channelID;
 
+    recordingChannels = [
+        '480807623525007361',
+        '544059704570150912',
+        '398099895569088513',
+    ];
+
+    let newRecVC = recordingChannels.find(elem => elem == newUserChannel);
+    let oldRecVC = recordingChannels.find(elem => elem == oldUserChannel);
+
     let timeInChannel;
 
-    if ((oldUserChannel == undefined || oldUserChannel == '704233423794995312' || oldUserChannel == '704233467012972564' || oldUserChannel == '704233511145701497' || oldUserChannel == '696666666628546662' || oldUserChannel == '411951021536051202') && (newUserChannel == '480807623525007361' || newUserChannel == '398099895569088513' || newUserChannel == '544059704570150912')) {
+    if (newRecVC && !oldRecVC) {
+        // if ((oldUserChannel == undefined || oldUserChannel == '704233423794995312' || oldUserChannel == '704233467012972564' || oldUserChannel == '704233511145701497' || oldUserChannel == '696666666628546662' || oldUserChannel == '411951021536051202') && (newUserChannel == '480807623525007361' || newUserChannel == '398099895569088513' || newUserChannel == '544059704570150912')) {
 
         channelUsers.push({
             connectionTime: Date.now(),
@@ -103,7 +113,8 @@ robot.on('voiceStateUpdate', async (oldState, newState) => {
 
         textChannel.send(`[${year}/${month + 1}/${day}   ${hour}:${minutes}:${seconds}] ${userName} подключился`);
 
-    } else if ((newUserChannel == undefined || newUserChannel == '704233423794995312' || newUserChannel == '704233467012972564' || newUserChannel == '704233511145701497' || newUserChannel == '696666666628546662' || newUserChannel == '411951021536051202') && (oldUserChannel == '480807623525007361' || oldUserChannel == '398099895569088513' || oldUserChannel == '544059704570150912')) {
+    // } else if ((newUserChannel == undefined || newUserChannel == '704233423794995312' || newUserChannel == '704233467012972564' || newUserChannel == '704233511145701497' || newUserChannel == '696666666628546662' || newUserChannel == '411951021536051202') && (oldUserChannel == '480807623525007361' || oldUserChannel == '398099895569088513' || oldUserChannel == '544059704570150912')) {
+    } else if (oldRecVC && !newRecVC) {
         
         let nameAndTag = newState.member.user.tag;
         let regexp = /\d+/y;
