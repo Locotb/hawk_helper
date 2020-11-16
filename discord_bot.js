@@ -34,6 +34,10 @@ robot.on('guildMemberAdd', async (member) => {
             allow: ['VIEW_CHANNEL'],
         },
         {
+            id: '763434829517422652',
+            allow: ['VIEW_CHANNEL'],
+        },
+        {
             id: '687287277956890661', // пенсия
             deny: ['VIEW_CHANNEL'],
         }, 
