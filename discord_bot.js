@@ -10,7 +10,6 @@ let channelUsers = [];
 const mysql = require('mysql2/promise');
 let mysqlConfig = require('./config-mysql.json');
 let verificationUsers = [];
-let fortext;
 
 robot.on('ready', async function() {
   /* При успешном запуске, в консоли появится сообщение «[Имя бота] запустился!» */
@@ -24,7 +23,7 @@ robot.on('guildMemberAdd', async (member) => {
     await member.roles.add('685130173670096907');
     let thisGuild = await robot.guilds.fetch('394055433641263105');
     let parent = await robot.channels.fetch('416584939413438475');
-    fortext = await thisGuild.channels.create(`Верификация ${member.user.username}`, {type: 'text', parent: parent, permissionOverwrites: [
+    let fortext = await thisGuild.channels.create(`Верификация ${member.user.username}`, {type: 'text', parent: parent, permissionOverwrites: [
         {
             id: member.id,
             allow: ['VIEW_CHANNEL', 'SEND_MESSAGES', 'READ_MESSAGE_HISTORY'],
@@ -116,6 +115,7 @@ robot.on('voiceStateUpdate', async (oldState, newState) => {
         '480807623525007361',
         '544059704570150912',
         '398099895569088513',
+        '777820894306238484',
     ];
 
     let newRecVC = recordingChannels.find(elem => elem == newUserChannel);
@@ -223,44 +223,49 @@ robot.on('message', async message => {
 
     if (message.author.id != '763434829517422652') {
         let thisVerUser = verificationUsers.find(item => item.userId == message.author.id);
+        let textChannel;
+        if (thisVerUser) {
+            textChannel = await message.client.channels.fetch(thisVerUser.channel);
+        }
+
         if (thisVerUser && thisVerUser.etap == 1 && message.content.match(/[а-яА-ЯЁё]/)) {
             thisVerUser.etap = 2;
             thisVerUser.name = message.content;
-            fortext.send('Сколько отроду лет тебе?```Ответом должно быть число```');
+            textChannel.send('Сколько отроду лет тебе?```Ответом должно быть число```');
         }
         if (thisVerUser && thisVerUser.etap == 2 && message.content.match(/\d+/)) {
             thisVerUser.etap = 3;
             thisVerUser.age = message.content;
-            fortext.send('Откуда ты прибыл к нам?```Ответом должо быть название города, в котором ты проживаешь, написанное кириллицой```');
+            textChannel.send('Откуда ты прибыл к нам?```Ответом должо быть название города, в котором ты проживаешь, написанное кириллицой```');
 
         }
         if (thisVerUser && thisVerUser.etap == 3 && message.content.match(/[а-яА-ЯЁё]/)) {
             thisVerUser.etap = 4;
             thisVerUser.city = message.content;
-            fortext.send('Почту нам тоже надобно знать...```Ответом должен быть e-mail. Например: dobrinya@mail.ru```');
+            textChannel.send('Почту нам тоже надобно знать...```Ответом должен быть e-mail. Например: dobrinya@mail.ru```');
 
         }
         if (thisVerUser && thisVerUser.etap == 4 && message.content.match(/@/)) {
             thisVerUser.etap = 5;
             thisVerUser.mail = message.content;
-            fortext.send('У тебя есть желание командовать ястребами?```Да/нет```');
+            textChannel.send('У тебя есть желание командовать ястребами?```Да/нет```');
             
         }
         if (thisVerUser && thisVerUser.etap == 6 && (message.content.match(/\w+/) || message.content.match(/[а-яА-ЯЁё]/))) {
             thisVerUser.etap = 7;
             thisVerUser.invite = message.content;
-            fortext.send('У всех богатырей есть Steam, а у тебя?```Ответом должна быть ссылка на твой профиль в стиме```');
+            textChannel.send('У всех богатырей есть Steam, а у тебя?```Ответом должна быть ссылка на твой профиль в стиме```');
 
         }
         if (thisVerUser && thisVerUser.etap == 5 && (message.content.match(/да/i) || message.content.match(/нет/i))) {
             thisVerUser.etap = 6;
             thisVerUser.command = message.content;
-            fortext.send('Кто предложил тебе присоединиться к нам?```Ответом может быть имя человека, позвавшего тебя в клан, или нвазвание ресурса, с которого ты пришел```');
+            textChannel.send('Кто предложил тебе присоединиться к нам?```Ответом может быть имя человека, позвавшего тебя в клан, или нвазвание ресурса, с которого ты пришел```');
 
         }
         if (thisVerUser && thisVerUser.etap == 7 && message.content.match(/steamcommunity.com/)) {
             thisVerUser.steam = message.content;
-            fortext.send(`Я передам старейшинам о твоем прибытии в Hawkband. Принятие решения о твоем зачислении в братство Ястреба может занять некоторое время. Спасибо за ответы, ${thisVerUser.name}.`);
+            textChannel.send(`Я передам старейшинам о твоем прибытии в Hawkband. Принятие решения о твоем зачислении в братство Ястреба может занять некоторое время. Спасибо за ответы, ${thisVerUser.name}.`);
             const exampleEmb = new Discord.MessageEmbed()
                 .setColor('#75c482')
                 .setTitle(':envelope_with_arrow: Новая заявка на верификацию :eagle:')
@@ -269,7 +274,7 @@ robot.on('message', async message => {
                     {name: ' :pencil: Имя:', value: thisVerUser.name}, 
                     {name: ' :underage: Возраст:', value: thisVerUser.age},
                     {name: ' :cityscape: Город проживания:', value: thisVerUser.city},
-                    {name: ' :video_game: Discord:', value: message.author.tag},
+                    {name: ' :video_game: Discord:', value: `${message.author.tag} <@${thisVerUser.userId}>`},
                     {name: ' :e_mail: E-mail:', value: thisVerUser.mail},
                     {name: ' :triangular_flag_on_post: Хочет ли командовать:', value: thisVerUser.command},
                     {name: ' :desktop: Steam:', value: thisVerUser.steam})
@@ -284,22 +289,47 @@ robot.on('message', async message => {
     
 robot.on('messageReactionAdd', async (reaction, user) => {
     // let textChannel = await robot.channels.fetch('763672675759161387'); // текстовый
-    let textChannel = fortext;
-    let textChannelAdm = await robot.channels.fetch('547032514976415755'); // для админов    
-    let test = verificationUsers.find(item => item.userId == user.id);
+    let thisGuild = await robot.guilds.fetch('394055433641263105');
 
     if (user.bot) return;
+    let textChannelAdm = await robot.channels.fetch('547032514976415755'); // верификация   
+    let thisVerUser = verificationUsers.find(item => item.userId == user.id);
+    let textChannel;
+    if (thisVerUser) {
+        textChannel = await reaction.client.channels.fetch(thisVerUser.channel);
+    }
+
     if (reaction.emoji.name == '✅' && reaction.message.channel.id == '547032514976415755') {
         try {
             let t = reaction.message.embeds[0].fields.find(item => item.name == ':e_mail: E-mail:');
             let thisUserIndex = verificationUsers.findIndex(item => item.mail == t.value);
-            let thisGuild = await robot.guilds.fetch('394055433641263105');
+            let thisVerUser = verificationUsers.find(item => item.mail == t.value);
+            // let thisGuild = await robot.guilds.fetch('394055433641263105');
             
             let us = await thisGuild.members.fetch(verificationUsers[thisUserIndex].userId);
             us.send("Поздравляю, верификация пройдена! Вся необходимая информация и правила есть на канале \"Добро пожаловать\":\nhttps://discord.com/channels/394055433641263105/412643124830142468/706165211714945035\nОзнакомься с ними, если ты этого еще не сделал. Если у тебя остались какие-либо вопросы, обратись к братьям по оружию.");
             
-            let fordelete = await robot.channels.fetch(verificationUsers[thisUserIndex].channel);
-            await fordelete.delete();
+            let firesideChannel = await robot.channels.fetch('702042182327992350'); // очаг, но пока что тестовый
+            let phrases = [
+                `<@&685131993955958838> <@&685131994069598227>\nЭй вы, воины грозные, спешить во все концы! Несите весточку радостную: быть в лагере нашем пиру богатому в честь прибытия ястреба нового, имя которому <@${thisVerUser.userId}> :eagle:`,
+                `<@&685131993955958838> <@&685131994069598227>\nИ был пир на весь мир за воина ратного <@${thisVerUser.userId}>, что в братсво Ястреба вступил... Люду доброму на радость, да злым врагам на зависть! И я там был, мед-пиво пил, по усам текло, да в рот не попало! :eagle:`,
+                `<@&685131993955958838> <@&685131994069598227>\nОткупоривай бочки с пивом-медом да наливай поскорей до краев, не жалей! Праздник у нас сегодня знатный будет... Поднимем же кубки за воина новобранного, имя которому <@${thisVerUser.userId}> :eagle:`,
+                `<@&685131993955958838> <@&685131994069598227>\nЖгите костры сигнальные, шлите весточку братьям на дальних рубежах, чтобы ехали на пир славный в честь прибытия воина великого , звать которого <@${thisVerUser.userId}>. Поприветствуем его братья словом добрым, да кубком полным хмельной медовухи. Улыбнется же Ястреб нам, да загрустит враг от того, насколько велико бравое воинство Hawkband :eagle:`,
+                `<@&685131993955958838> <@&685131994069598227>\nСегодня солнце теплее, лица добрее, медовуха вкуснее. Ястребы кружат над головами суровых бойцов - знак это добрый без спору. Закатывай пир! С новым братом, чье имя <@${thisVerUser.userId}>, обязательно мы победим! :eagle:`,
+                `<@&685131993955958838> <@&685131994069598227>\nРазошлите весть добрую по лагерю нашему: прибыл к нам новый боец, имя которому <@${thisVerUser.userId}>. Ястреб, будь вежлив с новым братом по оружию, подними кубок эля за здоровье и удачу его! :eagle:`,
+                `<@&685131993955958838> <@&685131994069598227>\nСлавься воинство Ястреба, звонарь же бей в колокола, да будут залиты медовухой кубки. Отныне пополнятся знамена наши, ибо воин бравый <@${thisVerUser.userId}> примкнул к нам. Да прибудет с тобой Ястреб :eagle:`,
+                `<@&685131993955958838> <@&685131994069598227>\nА и сильные, могучие воины в славном братсве Ястреба! Не скакать врагам по нашей земле! Не топтать их коням землю нашу родную! Не затмить им солнце наше красное! Поприветствуем же брата нового, имя которому <@${thisVerUser.userId}>, что горой станет в стене щитов наших, что дуб столентний вырвет с корнем, если тот путь преграждать будет! :eagle:`,
+                `<@&685131993955958838> <@&685131994069598227>\nВек стоит лагерь наш - не шатается! И века простоит - не шелохнется! <@${thisVerUser.userId}>, за тебя, воин славный, мы кубки до краев полные поднимаем! Не подводи братьев-ястребов! :eagle:`,
+                `<@&685131993955958838> <@&685131994069598227>\nСегодня день благодатный, ибо стал под наши знамена воин знатный <@${thisVerUser.userId}>. На бой, ястребы! Разобьем врагов полчище несметное! Слава да почет ждут нас не только в нашем народе, но и в других странах заморских! :eagle:`,
+            ];
+            let randomIndex = Math.trunc(Math.random() * 10);
+
+            let msg = await firesideChannel.send(phrases[randomIndex]);
+            let emoji1 = thisGuild.emojis.cache.find(item => item.name == 'Drink');
+            let emoji2 = thisGuild.emojis.cache.find(item => item.name == 'notwar');
+            msg.react('🦅');
+            msg.react(emoji1);
+            msg.react(emoji2); 
 
             await us.roles.remove('685130173670096907');
             await us.roles.add('685130173154066480');
@@ -307,10 +337,13 @@ robot.on('messageReactionAdd', async (reaction, user) => {
             await us.roles.add('685131994069598227');
             await us.setNickname(`ᛩ ${us.user.username}`);
 
+            let fordelete = await robot.channels.fetch(verificationUsers[thisUserIndex].channel);
+            await fordelete.delete();
+
             verificationUsers.splice(thisUserIndex, 1);
             let r = reaction.message.reactions.cache.find(item => item.emoji.name == '❌');
             await r.remove();
-            textChannelAdm.send(`Заявка была одобрена пользователем ${user.username}`);
+            textChannelAdm.send(`Заявка была одобрена пользователем ${user.username}\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${reaction.message.id}`);
             
         } catch (err) {
             if (err.name == 'TypeError' && err.message == 'Cannot read property \'userId\' of undefined') textChannelAdm.send(`<@${user.id}>, заявка уже была одобрена!`);
@@ -342,9 +375,9 @@ robot.on('messageReactionAdd', async (reaction, user) => {
 
         }//&& thisGuild.member(user).roles.cache.find(item => item.id == '685130173670096907')
 
-    } else if (reaction.emoji.name == '✅' && test !== undefined && reaction.message.channel.id == test.channel) { // добавить проверку на ид канала
+    } else if (reaction.emoji.name == '✅' && thisVerUser !== undefined && reaction.message.channel.id == thisVerUser.channel) { // добавить проверку на ид канала
         textChannel.send('Отлично! Тогда начнем. Как звать тебя, путник?\n```Ответом должно быть твое настоящее имя, написанное кириллицой```'); 
-        test.etap = 1;
+        thisVerUser.etap = 1;
         // verificationUsers.push({
         //     userId: user.id,
         //     etap: 1,
@@ -354,7 +387,7 @@ robot.on('messageReactionAdd', async (reaction, user) => {
         await r.remove();
         reaction.message.react('✅');
         
-    } else if (reaction.emoji.name == '❌' && test !== undefined && reaction.message.channel.id == test.channel) { // добавить проверку на ид канала
+    } else if (reaction.emoji.name == '❌' && thisVerUser !== undefined && reaction.message.channel.id == thisVerUser.channel) { // добавить проверку на ид канала
         textChannel.send('Что ж, дело твое. В таком случае ты остаешься новобранцем с рядом запретов в нашем лагере. Если передумаешь, дай знать.```Если захочешь начать процесс верификации, то нажми на галочку```');
         let thisUserIndex = verificationUsers.findIndex(item => item.userId == user.id);
         let r = reaction.message.reactions.cache.find(item => item.emoji.name == '❌'); //reaction.emoji
@@ -364,6 +397,69 @@ robot.on('messageReactionAdd', async (reaction, user) => {
         verificationUsers.splice(thisUserIndex, 1);
 
     } 
+
+    // games
+
+    if (reaction.message.channel == '767326891291049994') {
+        
+        await thisGuild.member(user).roles.add('775333808308224020');
+
+        switch (reaction.emoji.name) {
+            case '🏇':
+                await thisGuild.member(user).roles.add('775651605721907200');
+            break;
+            case '🤺':
+                await thisGuild.member(user).roles.add('775647785558474753');
+            break;
+            case '🗽':
+                await thisGuild.member(user).roles.add('775651543680548875');
+            break;
+            case '🛬':
+                await thisGuild.member(user).roles.add('775651344286482442');
+            break;
+            case '🌴':
+                await thisGuild.member(user).roles.add('775408949288632372');
+            break;
+            case '🔩':
+                await thisGuild.member(user).roles.add('775334053071028256');
+            break;
+            case '🥨':
+                await thisGuild.member(user).roles.add('775394005323481108');
+            break;
+        }
+    }
+
+});
+
+robot.on('messageReactionRemove', async (reaction, user) => {
+
+    if (reaction.message.channel == '767326891291049994') {
+        let thisGuild = await robot.guilds.fetch('394055433641263105');
+
+        switch (reaction.emoji.name) {
+            case '🏇':
+                await thisGuild.member(user).roles.remove('775651605721907200');
+            break;
+            case '🤺':
+                await thisGuild.member(user).roles.remove('775647785558474753');
+            break;
+            case '🗽':
+                await thisGuild.member(user).roles.remove('775651543680548875');
+            break;
+            case '🛬':
+                await thisGuild.member(user).roles.remove('775651344286482442');
+            break;
+            case '🌴':
+                await thisGuild.member(user).roles.remove('775408949288632372');
+            break;
+            case '🔩':
+                await thisGuild.member(user).roles.remove('775334053071028256');
+            break;
+            case '🥨':
+                await thisGuild.member(user).roles.remove('775394005323481108');
+            break;
+        }
+    }
 
 });
 
