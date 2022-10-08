@@ -54,5 +54,17 @@
     "ambassador_welcome": {
         "ru": "Добро пожаловать, друг!",
         "eng": "Welcome, friend!"
+    },
+    "application_sended": {
+        "ru": "Я передам старейшинам о твоем прибытии в Hawkband. Проверка заявки может занять какое-то время. Спасибо за ответы, ",
+        "eng": "I will inform the elders of your arrival at Hawkband. Verification of the application may take some time. Thanks for the answers, "
+    },
+    "form_confirmed_ally": {
+        "ru": "Твоя заявка на верификацию была одобрена старейшинами. Добро пожаловать, друг ястребов!",
+        "eng": "Your verification application has been confirmed by the elders. Welcome, friend of the hawks!"
+    },
+    "form_rejected_ally": {
+        "ru": "Твоя заявка на верификацию была отклонена старейшинами. Возможно, клан, который ты  указал в заявке, не является нашим союзником.",
+        "eng": "Your verification application has been rejected by the elders. Perhaps the clan you indicated in the application isn't our ally."
     }
 }
