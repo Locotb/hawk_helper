@@ -102,6 +102,9 @@ robot.once('ready', async () => {
 });
 
 robot.on('interactionCreate', async interaction => {
+
+    // await interaction.deferReply(); // !! фраза "Эта кнопка предназначается для другого пользователя!" перестает быть невидимой
+
 	if ( interaction.isCommand() ) {
         const { commandName } = interaction;
 
@@ -113,10 +116,14 @@ robot.on('interactionCreate', async interaction => {
         //let thisVerUser = verificationUsers.find(verUser => verUser.userId === interaction.member.id); work version
         let thisVerMember = verificationUsers.find(verMember => (verMember.memberId === interaction.member.id) && (verMember.channelId === interaction.channelId));
 
-        if (!thisVerMember /*!thisVerUser work version */ /*|| interaction.channelId !== thisVerUser.channelId*/) { // !! логика работает правильно до тех пор, пока кнопки есть только в верификации
-            await interaction.reply({ content: `Эта кнопка предназначается для другого пользователя!`, ephemeral: true });
+        // !! тестовый в проверке ниже
+        if (!thisVerMember && interaction.channelId !== '767326891291049994') { // !! логика работает правильно до тех пор, пока кнопки есть только в верификации
+            await interaction.deferReply({ ephemeral: true });
+            await interaction.editReply(`Эта кнопка предназначается для другого пользователя!`);
             return;
-        } 
+        }
+
+        await interaction.deferReply();
 
         if (interaction.customId === 'ru' || interaction.customId === 'eng' || interaction.customId === 'reject_verification_info') await thisVerMember.startRoleChoice(interaction);
         else if (interaction.customId === 'recruit') { thisVerMember.role = 'recruit'; await thisVerMember.startPhase('recruitName', interaction); } 
@@ -125,36 +132,36 @@ robot.on('interactionCreate', async interaction => {
         else if (interaction.customId === 'cancel') await thisVerMember.startPrevPhase(interaction);
         else if (interaction.customId === 'confirm_verification_info') await thisVerMember.sendFormToAdmins(interaction);
         else if (interaction.customId === 'ok_recruit') { // !! change customId
-            await thisVerMember.onConfirmForm(interaction);
-            thisVerMember.destroy();
             let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
             let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
+            await verificationUsers[thisUserIndex].onConfirmForm(interaction);
+            // thisVerMember.destroy();
             verificationUsers.splice(thisUserIndex, 1);
         }
         else if (interaction.customId === 'no_recruit') { // !! change customId
-            await thisVerMember.onRejectForm(interaction);
-            thisVerMember.destroy();
             let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
             let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
+            await verificationUsers[thisUserIndex].onRejectForm(interaction);
+            // thisVerMember.destroy();
             verificationUsers.splice(thisUserIndex, 1);
         }
         else if (interaction.customId === 'ok_ally') { 
-            await thisVerMember.onConfirmFormAlly(interaction);
             let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
             let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
+            await verificationUsers[thisUserIndex].onConfirmFormAlly(interaction);
             verificationUsers.splice(thisUserIndex, 1); 
         }
         else if (interaction.customId === 'no_ally') { 
-            await thisVerMember.onRejectFormAlly(interaction);
             let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
             let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
+            await verificationUsers[thisUserIndex].onRejectFormAlly(interaction);
             verificationUsers.splice(thisUserIndex, 1); 
         }
         else if (interaction.customId.match(/param/)) await thisVerMember.startEditing(interaction); // !! мб передавать только interaction?
         else if (interaction.customId === 'confirm_verification_info_ambassador') { 
-            await thisVerMember.onConfirmInfoAmbassador();
-            let index = verificationUsers.indexOf(thisVerMember); // !! indexOf?
-            verificationUsers.splice(index, 1);
+            await thisVerMember.onConfirmInfoAmbassador(); // из-за удаления канала verificationUsers очищается !!
+            // let index = verificationUsers.findIndex(verMember => verMember.memberId === interaction.member.id); // !! indexOf?
+            // verificationUsers.splice(index, 1);
         }
     }
 
@@ -551,9 +558,9 @@ robot.on('messageCreate', async message => {
 
     if (verificationUsers[0]) {
         //let thisVerUser = verificationUsers.find(verUser => verUser.userId === message.author.id); цщкл мукышщт
-        let thisVerMember = verificationUsers.find(verMember => verMember.memberId === message.author.id);
+        let thisVerMember = verificationUsers.find(verMember => (verMember.memberId === message.member.id) && (verMember.channelId === message.channelId));
 
-        if (thisVerMember && message.channelId === thisVerMember.channelId) {
+        if (thisVerMember) {
         //if (thisVerUser && message.channelId === thisVerUser.channelId) { work version
             //await verification.manageDialog(message, thisVerUser);; // !! проверить логику в отладчике     work version
 

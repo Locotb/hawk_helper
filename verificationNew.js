@@ -58,11 +58,11 @@ module.exports = class Verification {
             },
         ];
 
-        let parent = await member.guild.channels.fetch('416584939413438475');
+        let parent = await member.guild.channels.fetch('416584939413438475'); // категория "информация"
 
-        await member.roles.add('685130173670096907');
+        await member.roles.add('685130173670096907'); // новобранец
         let thisGuild = member.guild;
-        this.channel = await thisGuild.channels.create(`❗${member.user.username} верификация`, {type: 'GUILD_TEXT', parent: parent, permissionOverwrites: permissions});
+        this.channel = await thisGuild.channels.create(`❗${member.user.username} верификация`, { type: 'GUILD_TEXT', parent: parent, permissionOverwrites: permissions });
         this.channelId = this.channel.id;
 
         await this.startLangChoice();
@@ -79,7 +79,7 @@ module.exports = class Verification {
         if (this.lastBotMsg) await this.disableBtns(this.lastBotMsg);
 
         if (interaction) {
-            await interaction.reply({ content: content, components: btns });
+            await interaction.editReply({ content: content, components: btns });
             this.lastBotMsg = await interaction.fetchReply();
         }
         else this.lastBotMsg = await this.channel.send({ content: content, components: btns });
@@ -99,16 +99,16 @@ module.exports = class Verification {
             btnsStyles.push('SECONDARY');
         }
 
-        btnsIds.push(...['ally', 'ambassador', 'cancel']); // !! массив зачем? можно убрать вроде
-        btnsLabels.push(...['', '', '']);
-        btnsEmojis.push(...['620724518717227009', '🕊️', '↩️']);
-        btnsStyles.push(...['SECONDARY', 'SECONDARY', 'PRIMARY']);
+        btnsIds.push('ally', 'ambassador', 'cancel');
+        btnsLabels.push('', '', '');
+        btnsEmojis.push('620724518717227009', '🕊️', '↩️');
+        btnsStyles.push('SECONDARY', 'SECONDARY', 'PRIMARY');
     
-        msg = this.getPhrase(this.phase.name); //phrases[this.lang].role_choice;
+        msg = this.getPhrase(this.phase.name);
         btns = this.createBtns(btnsIds, btnsLabels, btnsEmojis, btnsStyles);
 
         await this.disableBtns(this.lastBotMsg);
-        await interaction.reply({ content: msg, components: btns });
+        await interaction.editReply({ content: msg, components: btns });
         this.lastBotMsg = await interaction.fetchReply();   
     }
 
@@ -117,12 +117,9 @@ module.exports = class Verification {
 
         await this.disableBtns(this.lastBotMsg);
         if (interaction) { // if (typeof interaction !== 'string') - была ошибка, надо проверить !!
-            // await interaction.reply({ content: this.phase.msgText, components: this.createCancelBtn() });
-            await interaction.deferReply();
             await interaction.editReply({ content: this.getPhrase(phaseName), components: this.createCancelBtn() });
             this.lastBotMsg = await interaction.fetchReply();
         }
-        // else this.lastBotMsg = await this.channel.send({ content: this.phase.msgText, components: this.createCancelBtn() });
         else this.lastBotMsg = await this.channel.send({ content: this.getPhrase(this.phase.name), components: this.createCancelBtn() });
     }
 
@@ -156,7 +153,7 @@ module.exports = class Verification {
         await this.disableBtns(this.lastBotMsg);
 
         let btns = this.createOkNoBtns('confirm_verification_info_ambassador', 'reject_verification_info');
-        await interaction.reply({ content: phrases.ambassador_confirmation[this.lang], components: btns });
+        await interaction.editReply({ content: phrases.ambassador_confirmation[this.lang], components: btns });
         this.lastBotMsg = await interaction.fetchReply();
     }
 
@@ -166,7 +163,7 @@ module.exports = class Verification {
         await tMember.roles.add('411968125869752340');
         await tMember.roles.remove('685130173670096907');
         await this.channel.delete();
-        await tMember.send(phrases.ambassador_welcome[this.lang]);
+        await tMember.send(phrases.ambassador_welcome[this.lang]); // sendPM !!
     }
 
     async startInfoConfirmation() {
@@ -202,12 +199,14 @@ module.exports = class Verification {
     }
 
     async sendFormToAdmins(interaction) {
-        await interaction.reply(`Я передам старейшинам о твоем прибытии в Hawkband. Принятие решения о твоем зачислении в братство Ястреба может занять некоторое время. Спасибо за ответы, ${this.name}.`);
+        await interaction.editReply(phrases.application_sended[this.lang] + (this.name ? this.name : interaction.member.nickname));
+
+        await this.disableBtns(this.lastBotMsg);
 
         const verificationForm = new MessageEmbed()
             .setColor(this.role === 'recruit' ? '#75c482' : '#AD1457')
             .setTitle(`:envelope_with_arrow: Новая заявка на верификацию ${this.role === 'recruit' ? ':eagle:' : ':crossed_swords:'/*':620724518717227009:'*/}`) // !! побороться за кастомное эмодзи - потенциальный ответ = <:emoji_name:emoji_id>
-            .setFooter('Hawkband Clan')
+            .setFooter('Hawkband Clan') // !!
             .addFields(...this.params,
                 { name: ' :video_game: Discord:', value: `${interaction.user.tag} <@${this.memberId}>` },
                 { name: ' :id: id:', value: `${interaction.user.id}` })
@@ -239,7 +238,7 @@ module.exports = class Verification {
         for (let phase of phases) {
             if (phase[1].id === phaseId) {
                 this.setPhase(phase[0]);
-                await interaction.reply(this.getEditingPhrase(this.phase.name));
+                await interaction.editReply(this.getEditingPhrase(this.phase.name));
                 break;
             }
         }
@@ -277,7 +276,7 @@ module.exports = class Verification {
         if (!verMember) return; // !! такая ситуация может быть?
         await this.disableBtns(interaction.message);
 
-        await interaction.reply(`Заявка была **одобрена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
+        await interaction.editReply(`Заявка была **одобрена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
         let firesideChannel = await interaction.guild.channels.fetch('767326891291049994'); // id заменен на тестовый !! fireside устарело, дать переменной универсальное имя
         let phrases1 = [ // !! название переменной
             `<@&685131993955958838> <@&685131994069598227>\nЭй вы, воины грозные, спешить во все концы! Несите весточку радостную: быть в лагере нашем пиру богатому в честь прибытия ястреба нового, имя которому <@${verMember.id}> :eagle:`,
@@ -317,7 +316,7 @@ module.exports = class Verification {
         await this.disableBtns(interaction.message);
 
         await this.channel.delete();
-        await interaction.reply(`Заявка была **отклонена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
+        await interaction.editReply(`Заявка была **отклонена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
         
         let msg = `Твоя заявка на верификацию была отклонена старейшинами. Возможно, ты не соответствуешь требованием нашего сообщества`;
         // await verMember.kick(); !!
@@ -331,15 +330,13 @@ module.exports = class Verification {
         if (!verMember) return; // !! такая ситуация может быть?
         await this.disableBtns(interaction.message);
 
-        await interaction.reply(`Заявка была **одобрена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
+        await interaction.editReply(`Заявка была **одобрена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
         await verMember.roles.add('697102081827274794');
         await verMember.roles.remove('685130173670096907');
         await this.channel.delete();
-        let msg = `Поздравляю, верификация пройдена! Вся необходимая информация и правила есть на канале "Welcome": 
-        \nhttps://discord.com/channels/394055433641263105/412643124830142468/706165211714945035\n
-        Ознакомься с ними, если ты этого еще не сделал. Если у тебя остались какие-либо вопросы, обратись к братьям по оружию.`; // !! text
         
-        await sendPM(msg, verMember.user, interaction.guild, 'об одобрении заявки на верификацию');
+        // txt form_confirmed_ally !!
+        await sendPM(phrases.form_confirmed_ally[this.lang], verMember.user, interaction.guild, 'об одобрении заявки на верификацию');
     }
 
     async onRejectFormAlly(interaction) {
@@ -352,11 +349,10 @@ module.exports = class Verification {
         await verMember.roles.remove('685130173670096907');
 
         await this.channel.delete();
-        await interaction.reply(`Заявка была **отклонена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
-        
-        let msg = `Твоя заявка на верификацию была отклонена старейшинами. Возможно, ты не соответствуешь требованием нашего сообщества`;
+        await interaction.editReply(`Заявка была **отклонена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
     
-        await sendPM(msg, verMember.user, interaction.guild, 'об отказе заявки на верификацию');
+        // txt form_rejected_ally !!
+        await sendPM(phrases.form_rejected_ally[this.lang], verMember.user, interaction.guild, 'об отказе заявки на верификацию');
     }
 
     createBtns(idsArr, labelsArr, emojisArr, stylesArr) {
@@ -372,7 +368,7 @@ module.exports = class Verification {
         return [row];
     }
 
-    async disableBtns(msg) { // мб не передавать параметр, а внутри функции использовать this.lastBotMsg !!
+    async disableBtns(msg) { // мб не передавать параметр, а внутри функции использовать this.lastBotMsg !! - с onConfirmForm не прокатит
         let btns = [], rows = [];  // мб ситуация, когда у сообщения больше одного ряда кнопок
     
         msg.components.forEach(btnsRow => {
