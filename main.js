@@ -126,9 +126,13 @@ robot.on('interactionCreate', async interaction => {
         await interaction.deferReply();
 
         if (interaction.customId === 'ru' || interaction.customId === 'eng' || interaction.customId === 'reject_verification_info') await thisVerMember.startRoleChoice(interaction);
-        else if (interaction.customId === 'recruit') { thisVerMember.role = 'recruit'; await thisVerMember.startPhase('recruitName', interaction); } 
-        else if (interaction.customId === 'ally') { thisVerMember.role = 'ally'; await thisVerMember.startPhase('allyClanName', interaction); }
-        else if (interaction.customId === 'ambassador') { thisVerMember.role = 'ambassador'; await thisVerMember.onSelectAmbassador(interaction); }
+        
+        // else if (interaction.customId === 'recruit') { thisVerMember.role = 'recruit'; await thisVerMember.startPhase('recruitName', interaction); }
+        // else if (interaction.customId === 'ally') { thisVerMember.role = 'ally'; await thisVerMember.startPhase('allyClanName', interaction); }
+        // else if (interaction.customId === 'ambassador') { thisVerMember.role = 'ambassador'; await thisVerMember.onSelectAmbassador(interaction); }
+
+        else if (interaction.customId === 'recruit' || interaction.customId === 'ally' || interaction.customId === 'ambassador') { thisVerMember.role = interaction.customId; await thisVerMember.startNextPhase(interaction); }
+        
         else if (interaction.customId === 'cancel') await thisVerMember.startPrevPhase(interaction);
         else if (interaction.customId === 'confirm_verification_info') await thisVerMember.sendFormToAdmins(interaction);
         else if (interaction.customId === 'ok_recruit') { // !! change customId
@@ -136,26 +140,26 @@ robot.on('interactionCreate', async interaction => {
             let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
             await verificationUsers[thisUserIndex].onConfirmForm(interaction);
             // thisVerMember.destroy();
-            verificationUsers.splice(thisUserIndex, 1);
+            verificationUsers.splice(thisUserIndex, 1); // !! должно очищаться при удалении канала ведь?
         }
         else if (interaction.customId === 'no_recruit') { // !! change customId
             let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
             let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
             await verificationUsers[thisUserIndex].onRejectForm(interaction);
             // thisVerMember.destroy();
-            verificationUsers.splice(thisUserIndex, 1);
+            verificationUsers.splice(thisUserIndex, 1); // !! должно очищаться при удалении канала ведь?
         }
         else if (interaction.customId === 'ok_ally') { 
             let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
             let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
             await verificationUsers[thisUserIndex].onConfirmFormAlly(interaction);
-            verificationUsers.splice(thisUserIndex, 1); 
+            verificationUsers.splice(thisUserIndex, 1); // !! должно очищаться при удалении канала ведь?
         }
         else if (interaction.customId === 'no_ally') { 
             let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
             let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
             await verificationUsers[thisUserIndex].onRejectFormAlly(interaction);
-            verificationUsers.splice(thisUserIndex, 1); 
+            verificationUsers.splice(thisUserIndex, 1); // !! должно очищаться при удалении канала ведь?
         }
         else if (interaction.customId.match(/param/)) await thisVerMember.startEditing(interaction); // !! мб передавать только interaction?
         else if (interaction.customId === 'confirm_verification_info_ambassador') { 

@@ -1,42 +1,26 @@
-const { MessageEmbed, MessageActionRow, MessageButton, Interaction } = require('discord.js');
+const { MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
 const phrases = require('./phrases.json');
 const sendPM = require('./sendPM.js');
 
 const phases = new Map();
 const phasesNames = ['langChoice', 'roleChoice', 'recruitName', 'recruitAge', 'recruitCommand', 'recruitInvite', 'recruitSteam', 'confirmInfo', 'allyClanName'];
-const phasesIds = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-const phasesMsgs = [
-    `🇷🇺 Приветствую тебя, путник. Меня зовут Добрыня, я помогу тебе освоиться здесь. Чтобы мы могли продолжить, выбери язык\n🇬🇧 Welcome you, stranger. My name is Dobrinya. I'm here for help you get comfortable here. So that we can continue, select a language`,
-    '',
-    'Отлично! Тогда начнем. Как звать тебя, путник?\n```Ответом должно быть твое настоящее имя, написанное кириллицей```',
-    'Сколько отроду лет тебе?\n```Ответом должно быть число```',
-    'У тебя есть желание командовать ястребами?\n```Да/нет```',
-    'Кто предложил тебе присоединиться к нам?\n```Ответом может быть имя человека, позвавшего тебя в клан, или название ресурса, с которого ты пришел```',
-    'У всех богатырей есть Steam, а у тебя?\n```Ответом должна быть ссылка на твой профиль в стиме```',
-    'Итак, вот твоя анкета. Пожалуйста, перепроверь всю информацию и нажми:\n1. Если все верно - ✅\n2. Если нужно изменить информацию - на соответствующую цифру\n3. Если хочешь вернуться на этап определения роли (следующий за выбором языка) - ❌\n',
-    'Отлично! Из какого ты клана?'
-];
-const phasesEdits = [
-    '',
-    '',
-    'Как звать тебя, путник?\n```Ответом должно быть твое настоящее имя, написанное кириллицей```',
-    'Сколько отроду лет тебе?\n```Ответом должно быть число```',
-    'У тебя есть желание командовать ястребами?\n```Да/нет```',
-    'Кто предложил тебе присоединиться к нам?\n```Ответом может быть имя человека, позвавшего тебя в клан, или название ресурса, с которого ты пришел```',
-    'У всех богатырей есть Steam, а у тебя?\n```Ответом должна быть ссылка на твой профиль в стиме```',
-    '',
-    'Из какого ты клана?'
-];
 const phasesParams = ['', '', 'name', 'age', 'command', 'invite', 'steam', '', 'clanName'];
 const phasesParamTxts = ['', '', ' :pencil: Имя:', ' :underage: Возраст:', ' :triangular_flag_on_post: Хочет ли командовать:', ' :information_source: Кто пригласил/откуда узнал:', ' :desktop: Steam:', '', ' :classical_building: Название клана:'];
 const phasesRegExps = ['', '', /[а-яА-ЯЁё]/, /\d+/, /да|нет/i, /\D/, /steamcommunity.com/, '', /\D/];
 
-for (let i = 0; i < phasesNames.length; i++) phases.set(phasesNames[i], { id: phasesIds[i], name: phasesNames[i], msgText: phasesMsgs[i], editingTxt: phasesEdits[i], param: phasesParams[i], paramTxt: phasesParamTxts[i], regexp: phasesRegExps[i] });
+const phasesMap = { // !! substeps or subphases
+    recruit: ['langChoice', 'roleChoice', 'recruitName', 'recruitAge', 'recruitCommand', 'recruitInvite', 'recruitSteam', 'confirmInfo'], 
+    ally: ['langChoice', 'roleChoice', 'allyClanName', 'confirmInfo'], 
+    ambassador: ['langChoice', 'roleChoice', 'confirmInfo'],  
+}; 
+
+for (let i = 0; i < phasesNames.length; i++) phases.set(phasesNames[i], { id: i, name: phasesNames[i], param: phasesParams[i], paramTxt: phasesParamTxts[i], regexp: phasesRegExps[i] });
 
 
 module.exports = class Verification {
     constructor(member) {
         this.memberId = member.id;
+        this.role = 'ambassador';
         this.params = [];
         this.editingId = -1;
         this.create(member);
@@ -74,7 +58,7 @@ module.exports = class Verification {
         this.setPhase('langChoice');
         btns = this.createBtns(btnsIds, btnsLabes, btnsEmojis, btnsStyles);
         if (this.lang) content = this.getEditingPhrase(this.phase.name);
-        else content = `<@${this.memberId}>\n${this.phase.msgText}`;
+        else content = `<@${this.memberId}>\n${phrases.langChoice.ru}`;
 
         if (this.lastBotMsg) await this.disableBtns(this.lastBotMsg);
 
@@ -86,10 +70,11 @@ module.exports = class Verification {
     }
 
     async startRoleChoice(interaction) {
-        let msg = '', btnsIds = [], btnsLabels = [], btnsEmojis = [], btnsStyles = [], btns; //, lang = 
-
-        if (interaction.customId !== 'cancel' && interaction.customId !== 'reject_verification_info') this.lang = interaction.customId;;
+        let msg = '', btnsIds = [], btnsLabels = [], btnsEmojis = [], btnsStyles = [], btns;
+        await this.disableBtns(this.lastBotMsg);
         this.setPhase('roleChoice');
+
+        if (interaction.customId !== 'cancel' && interaction.customId !== 'reject_verification_info') this.lang = interaction.customId;
         this.params = [];
 
         if (this.lang === 'ru') {
@@ -106,46 +91,59 @@ module.exports = class Verification {
     
         msg = this.getPhrase(this.phase.name);
         btns = this.createBtns(btnsIds, btnsLabels, btnsEmojis, btnsStyles);
-
-        await this.disableBtns(this.lastBotMsg);
-        await interaction.editReply({ content: msg, components: btns });
-        this.lastBotMsg = await interaction.fetchReply();   
+        this.lastBotMsg = await interaction.editReply({ content: msg, components: btns });
+        // this.lastBotMsg = await interaction.fetchReply();   
     }
 
-    async startPhase(phaseName, interaction) { // interaction or message !!
+    async startPhase(phaseName, interaction) { // interaction or message !! - может быть только interaction, т.к. message не передаем - уже нет :)
+        let msg = this.getPhrase(phaseName), btn = this.createCancelBtn();
+        
         this.setPhase(phaseName);
-
         await this.disableBtns(this.lastBotMsg);
-        if (interaction) { // if (typeof interaction !== 'string') - была ошибка, надо проверить !!
-            await interaction.editReply({ content: this.getPhrase(phaseName), components: this.createCancelBtn() });
-            this.lastBotMsg = await interaction.fetchReply();
+
+        if (interaction) {
+            this.lastBotMsg = await interaction.editReply({ content: msg, components: btn }); // мб lastbotmsg = editreply? !!
+            // this.lastBotMsg = await interaction.fetchReply();
         }
-        else this.lastBotMsg = await this.channel.send({ content: this.getPhrase(this.phase.name), components: this.createCancelBtn() });
+        else this.lastBotMsg = await this.channel.send({ content: msg, components: btn });
     }
 
-    async startNextPhase() {
-        if (this.phase.id === 6) await this.startInfoConfirmation();
-        else {
-            for (let phase of phases) {
-                if (phase[1].id === this.phase.id + 1) { // continue !!
-                    await this.startPhase(phase[0]); 
-                    break;
-                }
-            }   
+    async startNextPhase(interaction) {
+        // if (this.phase.id === 6) await this.startInfoConfirmation();
+        // else {
+        //     for (let phase of phases) {
+        //         if (phase[1].id !== this.phase.id + 1) continue;
+        //         await this.startPhase(phase[0]); 
+        //         break;
+        //     }   
+        // }
+
+        let nextPhase = phasesMap[this.role][this.phase.id + 1];
+
+        if (nextPhase === 'roleChoice') await this.startRoleChoice(interaction);
+        else if (nextPhase === 'confirmInfo') {
+            if (this.role === 'ambassador') await this.onSelectAmbassador(interaction);
+            else await this.startInfoConfirmation();
         }
+        else await this.startPhase(nextPhase, interaction);
     }
 
     async startPrevPhase(interaction) { // !! нужно использовать editingTxt
-        if (this.phase.id === 2 || this.phase.id === 8) await this.startRoleChoice(interaction);
-        else if (this.phase.id === 1) await this.startLangChoice(interaction);
-        else {
-            for (let phase of phases) {
-                if (phase[1].id === this.phase.id - 1) { // continue !!
-                    await this.startPhase(phase[0], interaction); 
-                    break;
-                }
-            }
-        }
+        // if (this.phase.id === 2 || this.phase.id === 8) await this.startRoleChoice(interaction);
+        // else if (this.phase.id === 1) await this.startLangChoice(interaction);
+        // else {
+        //     for (let phase of phases) {
+        //         if (phase[1].id !== this.phase.id - 1) continue;
+        //         await this.startPhase(phase[0], interaction); 
+        //         break;
+        //     }
+        // }
+
+        let prevPhase = phasesMap[this.role][this.phase.id - 1];
+
+        if (prevPhase === 'langChoice') await this.startLangChoice(interaction);
+        else if (prevPhase === 'roleChoice') await this.startRoleChoice(interaction);
+        else await this.startPhase(prevPhase, interaction);
     }
 
     async onSelectAmbassador(interaction) {
@@ -155,15 +153,6 @@ module.exports = class Verification {
         let btns = this.createOkNoBtns('confirm_verification_info_ambassador', 'reject_verification_info');
         await interaction.editReply({ content: phrases.ambassador_confirmation[this.lang], components: btns });
         this.lastBotMsg = await interaction.fetchReply();
-    }
-
-    async onConfirmInfoAmbassador() {
-        let tMember = await this.channel.guild.members.fetch(this.memberId);
-
-        await tMember.roles.add('411968125869752340');
-        await tMember.roles.remove('685130173670096907');
-        await this.channel.delete();
-        await tMember.send(phrases.ambassador_welcome[this.lang]); // sendPM !!
     }
 
     async startInfoConfirmation() {
@@ -187,14 +176,13 @@ module.exports = class Verification {
         const verificationForm = new MessageEmbed()
                 .setColor(this.role === 'recruit' ? '#75c482' : '#AD1457')
                 .setTitle(':exclamation: Подтверждение информации :exclamation:')
-                .setFooter('Hawkband Clan')
+                .setFooter({ text: 'Hawkband Clan' })
                 .addFields(...params)
                 .setThumbnail(tMember.user.avatarURL()).setTimestamp();
 
         btns = this.createBtns(btnsIds, btnsLabels, btnsEmojis, btnsStyles);
         btns2 = this.createOkNoBtns('confirm_verification_info', 'reject_verification_info');
         btns.push(...btns2); // !! если btns = [row] и btns2 = [row], то надо ли так делать?
-        // this.lastBotMsg = await this.channel.send({ content: this.phase.msgText, embeds: [verificationForm], components: btns });
         this.lastBotMsg = await this.channel.send({ content: this.getPhrase(this.phase.name), embeds: [verificationForm], components: btns });
     }
 
@@ -206,7 +194,7 @@ module.exports = class Verification {
         const verificationForm = new MessageEmbed()
             .setColor(this.role === 'recruit' ? '#75c482' : '#AD1457')
             .setTitle(`:envelope_with_arrow: Новая заявка на верификацию ${this.role === 'recruit' ? ':eagle:' : ':crossed_swords:'/*':620724518717227009:'*/}`) // !! побороться за кастомное эмодзи - потенциальный ответ = <:emoji_name:emoji_id>
-            .setFooter('Hawkband Clan') // !!
+            .setFooter({ text: 'Hawkband Clan' })
             .addFields(...this.params,
                 { name: ' :video_game: Discord:', value: `${interaction.user.tag} <@${this.memberId}>` },
                 { name: ' :id: id:', value: `${interaction.user.id}` })
@@ -219,11 +207,11 @@ module.exports = class Verification {
         let param = this.params.find(param => param.name === this.phase.paramTxt);
         if (param) param.value = answer;
         else this.params.push({ name: this.phase.paramTxt, value: answer });
-        //this.params[this.phase.param] = answer;
     }
 
     isCorrectAnswer(answer) {
-        if (this.phase.regexp !== '') return answer.match(this.phase.regexp) === null ? false : true;
+        // if (this.phase.regexp !== '') return answer.match(this.phase.regexp) === null ? false : true;
+        if (this.phase.regexp !== '') return answer.match(this.phase.regexp) !== null;
         else return false;
     }
 
@@ -258,17 +246,13 @@ module.exports = class Verification {
         return phrases[key][this.lang];
     }
 
-    getEditingPhrase(key) {
-        return phrases[`${key}_editing`] ? phrases[`${key}_editing`][this.lang] : phrases[key][this.lang]
+    getEditingPhrase(key) { // !! больше не нужна?
+        return phrases[`${key}_editing`] ? phrases[`${key}_editing`][this.lang] : phrases[key][this.lang];
     }
 
     setPhase(phaseName) {
         this.phase = phases.get(phaseName);
     }
-
-    // confirmInfo() {}
-
-    // rejectInfo() {}
 
     async onConfirmForm(interaction) {
         let verMember = await interaction.guild.members.fetch(this.memberId);
@@ -309,21 +293,6 @@ module.exports = class Verification {
         await sendPM(msg1, verMember.user, interaction.guild, 'об одобрении заявки на верификацию');
     }
 
-    async onRejectForm(interaction) {
-        let verMember = await interaction.guild.members.fetch(this.memberId);
-
-        if (!verMember) return; // !! такая ситуация может быть?
-        await this.disableBtns(interaction.message);
-
-        await this.channel.delete();
-        await interaction.editReply(`Заявка была **отклонена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
-        
-        let msg = `Твоя заявка на верификацию была отклонена старейшинами. Возможно, ты не соответствуешь требованием нашего сообщества`;
-        // await verMember.kick(); !!
-    
-        await sendPM(msg, verMember.user, interaction.guild, 'об отказе заявки на верификацию');
-    }
-
     async onConfirmFormAlly(interaction) {
         let verMember = await interaction.guild.members.fetch(this.memberId);
         
@@ -337,6 +306,30 @@ module.exports = class Verification {
         
         // txt form_confirmed_ally !!
         await sendPM(phrases.form_confirmed_ally[this.lang], verMember.user, interaction.guild, 'об одобрении заявки на верификацию');
+    }
+
+    async onConfirmInfoAmbassador() {
+        let tMember = await this.channel.guild.members.fetch(this.memberId);
+
+        await tMember.roles.add('411968125869752340');
+        await tMember.roles.remove('685130173670096907');
+        await this.channel.delete();
+        await sendPM(phrases.ambassador_welcome[this.lang], tMember.user, tMember.guild, 'приветствия посла');
+    }
+
+    async onRejectForm(interaction) {
+        let verMember = await interaction.guild.members.fetch(this.memberId);
+
+        if (!verMember) return; // !! такая ситуация может быть?
+        await this.disableBtns(interaction.message);
+
+        await this.channel.delete();
+        await interaction.editReply(`Заявка была **отклонена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/394055433641263105/547032514976415755/${interaction.message.id}`);
+        
+        let msg = `Твоя заявка на верификацию была отклонена старейшинами. Возможно, ты не соответствуешь требованием нашего сообщества`;
+        // await verMember.kick(); !!
+    
+        await sendPM(msg, verMember.user, interaction.guild, 'об отказе заявки на верификацию');
     }
 
     async onRejectFormAlly(interaction) {
@@ -398,10 +391,25 @@ module.exports = class Verification {
     }
 
     createCancelBtn() {
-        return this.createBtns(['cancel'], [''], ['↩️'], ['PRIMARY'])
+        return this.createBtns(['cancel'], [''], ['↩️'], ['PRIMARY']);
     }
 
     destroy() { // нужно? !!
         
     }
+}
+
+
+class Recruit_Verification extends Verification {
+
+}
+
+
+class Ally_Verification extends Verification {
+
+}
+
+
+class Ambassador_Verification extends Verification {
+
 }
