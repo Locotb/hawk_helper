@@ -8,11 +8,11 @@
         "eng": "🇷🇺 Чтобы мы могли продолжить, выбери язык\n🇬🇧 So that we can continue, select a language"
     },
     "roleChoice": {
-        "ru": "Теперь нужно определиться с ролью. Для этого нажми:\n1. Если хочешь вступить в клан - ⚔️\n2. Если ты представитель союзного клана - <:notwar:620724518717227009>\n3. Если ты предстувить другого клана (посол) или просто путник, желающий отогреться у нашего очага (гость) - 🕊️",
-        "eng": "❗ You chose english, so you cannot join our clan because we accept into it only russian speaking participants ❗\nNow it is necessary to select the role. Please, click:\n1. If you represent an ally clan - <:notwar:620724518717227009>\n2. If you're an ambassador of clan which isn't ally or if you're a stranger who just want to get warm beside our fireplace - 🕊️"
+        "ru": "Определимся с ролью. Для этого нажми:\n1. Если хочешь вступить в клан - ⚔️\n2. Если ты представитель союзного клана - <:notwar:620724518717227009>\n3. Если ты предстувить другого клана (посол) или просто путник, желающий отогреться у нашего очага (гость) - 🕊️",
+        "eng": "❗ You chose english, so you cannot join our clan because we accept into it only russian speaking participants ❗\nLet's choose the role. Please, click:\n1. If you represent an ally clan - <:notwar:620724518717227009>\n2. If you're an ambassador of clan which isn't ally or if you're a stranger who just want to get warm beside our fireplace - 🕊️"
     },
     "recruitName": {
-        "ru": "Отлично! Тогда начнем. Как звать тебя, путник?\n```Ответом должно быть твое настоящее имя, написанное кириллицей```",
+        "ru": "Как звать тебя, путник?\n```Ответом должно быть твое настоящее имя, написанное кириллицей```",
         "eng": ""
     },
     "recruitName_editing": {
@@ -40,8 +40,8 @@
         "eng": "So, there is your form. Please check the information and press:\n1 If it is correct - ✅\n2. If it is need to change the information - the corresponding digit\n3. If you want to return to the role choice (next after language choice) - ❌\n"
     },
     "allyClanName": {
-        "ru": "Отлично! Из какого ты клана?",
-        "eng": "Good! Which clan do you represent?"
+        "ru": "Из какого ты клана?",
+        "eng": "Which clan do you represent?"
     },
     "allyClanName_editing": {
         "ru": "Из какого ты клана?",
