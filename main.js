@@ -30,7 +30,7 @@ const fs = require('fs'); // Подключаем родной модуль фа
 const { createReadStream } = require('fs');
 const manageGameRoles = require('./gameRoles.js');
 // const verification = require('./verification.js');
-const Verification = require('./verificationNew.js');
+const verificationClasses = { Verification, Recruit_Verification, Ally_Verification, Ambassador_Verification } = require('./verificationNew.js');
 const gameEvents = require('./gameEvents.js');
 const channelsListening = require('./channelsListening.js');
 const commands = require('./commands.js');
@@ -45,7 +45,6 @@ let eventSettings = {
     isEventNow: false,
 };
 let invites;
-
 
 const { createAudioPlayer, createAudioResource, StreamType, entersState, VoiceConnectionStatus, joinVoiceChannel } = require('@discordjs/voice');
 const player = createAudioPlayer();
@@ -84,27 +83,9 @@ robot.once('ready', async () => {
     infoChannel.fetchInvites().then(channelInvites => {
         invites = channelInvites;
     });
-
-
-
-    // const command = await robot.guilds.cache.get('394055433641263105').commands.fetch('932258456885416027');
-
-    // const permissions = [
-    //     {
-    //         id: '318010463948374017',
-    //         type: 'User',
-    //         permission: true,
-    //     }
-    // ];
-
-    // await command.permissions.add({ permissions });
-    
 });
 
 robot.on('interactionCreate', async interaction => {
-
-    // await interaction.deferReply(); // !! фраза "Эта кнопка предназначается для другого пользователя!" перестает быть невидимой
-
 	if ( interaction.isCommand() ) {
         const { commandName } = interaction;
 
@@ -114,7 +95,7 @@ robot.on('interactionCreate', async interaction => {
     }
     else if (interaction.isButton() && verificationUsers[0]) {
         //let thisVerUser = verificationUsers.find(verUser => verUser.userId === interaction.member.id); work version
-        let thisVerMember = verificationUsers.find(verMember => (verMember.memberId === interaction.member.id) && (verMember.channelId === interaction.channelId));
+        let thisVerMember = verificationUsers.find(verMember => (verMember.id === interaction.member.id) && (verMember.channel.id === interaction.channelId));
 
         // !! тестовый в проверке ниже
         if (!thisVerMember && interaction.channelId !== '767326891291049994') { // !! логика работает правильно до тех пор, пока кнопки есть только в верификации
@@ -127,46 +108,28 @@ robot.on('interactionCreate', async interaction => {
 
         if (interaction.customId === 'ru' || interaction.customId === 'eng' || interaction.customId === 'reject_verification_info') await thisVerMember.startRoleChoice(interaction);
         
-        // else if (interaction.customId === 'recruit') { thisVerMember.role = 'recruit'; await thisVerMember.startPhase('recruitName', interaction); }
-        // else if (interaction.customId === 'ally') { thisVerMember.role = 'ally'; await thisVerMember.startPhase('allyClanName', interaction); }
-        // else if (interaction.customId === 'ambassador') { thisVerMember.role = 'ambassador'; await thisVerMember.onSelectAmbassador(interaction); }
+        else if (interaction.customId === 'recruit' || interaction.customId === 'ally' || interaction.customId === 'ambassador') {
+            let classPrefix = interaction.customId.charAt(0).toUpperCase() + interaction.customId.slice(1),
+                index = verificationUsers.indexOf(thisVerMember);
 
-        else if (interaction.customId === 'recruit' || interaction.customId === 'ally' || interaction.customId === 'ambassador') { thisVerMember.role = interaction.customId; await thisVerMember.startNextPhase(interaction); }
-        
+            verificationUsers[index].role = interaction.customId;
+            verificationUsers[index] = new verificationClasses[`${classPrefix}_Verification`](thisVerMember, interaction.customId);
+            await verificationUsers[index].startNextPhase(interaction);
+        }
         else if (interaction.customId === 'cancel') await thisVerMember.startPrevPhase(interaction);
         else if (interaction.customId === 'confirm_verification_info') await thisVerMember.sendFormToAdmins(interaction);
-        else if (interaction.customId === 'ok_recruit') { // !! change customId
-            let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
-            let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
-            await verificationUsers[thisUserIndex].onConfirmForm(interaction);
-            // thisVerMember.destroy();
-            verificationUsers.splice(thisUserIndex, 1); // !! должно очищаться при удалении канала ведь?
+        else if (interaction.customId === 'ok_recruit' || interaction.customId === 'ok_ally') { // !! change customId
+            let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:');
+            let tMemberIndex = verificationUsers.findIndex(verUser => verUser.id === idField.value);
+            await verificationUsers[tMemberIndex].onConfirmForm(interaction);
         }
-        else if (interaction.customId === 'no_recruit') { // !! change customId
-            let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
-            let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
-            await verificationUsers[thisUserIndex].onRejectForm(interaction);
-            // thisVerMember.destroy();
-            verificationUsers.splice(thisUserIndex, 1); // !! должно очищаться при удалении канала ведь?
+        else if (interaction.customId === 'ok_ambassador') thisVerMember.onConfirmForm(interaction);        
+        else if (interaction.customId === 'no_recruit' || interaction.customId === 'no_ally') { // !! change customId
+            let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:');
+            let tMemberIndex = verificationUsers.findIndex(verUser => verUser.id === idField.value);
+            await verificationUsers[tMemberIndex].onRejectForm(interaction);
         }
-        else if (interaction.customId === 'ok_ally') { 
-            let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
-            let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
-            await verificationUsers[thisUserIndex].onConfirmFormAlly(interaction);
-            verificationUsers.splice(thisUserIndex, 1); // !! должно очищаться при удалении канала ведь?
-        }
-        else if (interaction.customId === 'no_ally') { 
-            let idField = interaction.message.embeds[0].fields.find(item => item.name === ':id: id:'); // !! мб лучше indexOf как в 'confirm_verification_info_ambassador'?
-            let thisUserIndex = verificationUsers.findIndex(verUser => verUser.memberId === idField.value);
-            await verificationUsers[thisUserIndex].onRejectFormAlly(interaction);
-            verificationUsers.splice(thisUserIndex, 1); // !! должно очищаться при удалении канала ведь?
-        }
-        else if (interaction.customId.match(/param/)) await thisVerMember.startEditing(interaction); // !! мб передавать только interaction?
-        else if (interaction.customId === 'confirm_verification_info_ambassador') { 
-            await thisVerMember.onConfirmInfoAmbassador(); // из-за удаления канала verificationUsers очищается !!
-            // let index = verificationUsers.findIndex(verMember => verMember.memberId === interaction.member.id); // !! indexOf?
-            // verificationUsers.splice(index, 1);
-        }
+        else if (interaction.customId.match(/param/)) await thisVerMember.startEditing(interaction);
     }
 
 });
@@ -175,7 +138,7 @@ robot.on('interactionCreate', async interaction => {
 robot.on('channelDelete', async channel => {
     let listenedChannelIndex = listenedChannelsIds.findIndex(id => id === channel.id);
 
-    if (listenedChannelIndex !== -1) {
+    if (~listenedChannelIndex) {
         listenedChannelsIds.splice(listenedChannelIndex, 1);
         const connection = await mysql.createConnection(mysqlConfig);
         await connection.execute(`DELETE FROM listened_channels WHERE channelId=${channel.id}`); // авто инкремент не поправляется
@@ -184,8 +147,8 @@ robot.on('channelDelete', async channel => {
     }
 
     if (verificationUsers[0]) {
-        let verificationUserIndex = verificationUsers.findIndex(user => user.channelId === channel.id);
-        if (verificationUserIndex !== -1) {
+        let verificationUserIndex = verificationUsers.findIndex(user => user.channel.id === channel.id);
+        if (~verificationUserIndex) {
             verificationUsers.splice(verificationUserIndex, 1);
             return;
         }
@@ -193,7 +156,7 @@ robot.on('channelDelete', async channel => {
 
     if (registrationUsers[0]) {
         let registrationUserIndex = registrationUsers.findIndex(user => user.channel === channel.id);
-        if (registrationUserIndex !== -1) {
+        if (~registrationUserIndex) {
             registrationUsers.splice(registrationUserIndex, 1);
             return;
         }
@@ -203,20 +166,16 @@ robot.on('channelDelete', async channel => {
 
 robot.on('guildMemberRemove', async member => {
     if (verificationUsers[0]) {
-        let verificationUserIndex = verificationUsers.findIndex(user => user.userId === member.id);
-        if (verificationUserIndex !== -1) {
-            if (verificationUsers[verificationUserIndex].phase === 6) {
-                let verChannel = await member.guild.channels.fetch('547032514976415755');
-                await verChannel.send(`text`);
-            }
-            verificationUsers.splice(verificationUserIndex, 1);
+        let verUserIndex = verificationUsers.findIndex(user => user.userId === member.id);
+        if (~verUserIndex) {
+            if (verificationUsers[verUserIndex].phase.name === 'confirmInfo') verificationUsers[verUserIndex].onLeaveGuild();
             return;
         }
     }
-    // !! добавить логику для случая, когда достигнута последняя фаза верификации/регистрации
+    // !! добавить логику для случая, когда достигнута последняя фаза регистрации
     if (registrationUsers[0]) {
         let registrationUserIndex = registrationUsers.findIndex(user => user.userId === member.id);
-        if (registrationUserIndex !== -1) {
+        if (~registrationUserIndex) {
             if (registrationUsers[registrationUserIndex].phase === 1) {
                 let regChannel = await member.guild.channels.fetch('819486790531809310');
                 await regChannel.send(`text`);
@@ -311,7 +270,9 @@ robot.on('guildMemberAdd', async (member) => {
     if (!eventSettings.isEventNow) {
         //await verification.createVerification(member, verificationUsers); // work version
 
-        verificationUsers.push(new Verification(member));
+        let newVerMember = new verificationClasses.Verification(member);
+        verificationUsers.push(newVerMember);
+        newVerMember.create(member);
     }
     else {
         const connection = await mysql.createConnection(mysqlConfig);
@@ -555,28 +516,28 @@ robot.on('messageCreate', async message => {
     if (message.content === '!test2' && message.channelId === '767326891291049994') {
         //await verification.createVerification(message.member, verificationUsers, message); work version
 
-        let verMember = new Verification(message.member);
+        let verMember = new verificationClasses.Verification(message.member);
         verificationUsers.push(verMember);
+        verMember.create(message.member);
     }
     if (message.content === '!test3' && message.channelId === '767326891291049994') await gameEvents.createRegistration(message.member, registrationUsers);
 
     if (verificationUsers[0]) {
-        //let thisVerUser = verificationUsers.find(verUser => verUser.userId === message.author.id); цщкл мукышщт
-        let thisVerMember = verificationUsers.find(verMember => (verMember.memberId === message.member.id) && (verMember.channelId === message.channelId));
+        //let thisVerUser = verificationUsers.find(verUser => verUser.userId === message.author.id); work version          !! ?. ↓ из-за !test2, потом можно убрать
+        let thisVerMember = verificationUsers.find(verMember => (verMember.id === message.member.id) && (verMember.channel?.id === message.channelId));
 
         if (thisVerMember) {
         //if (thisVerUser && message.channelId === thisVerUser.channelId) { work version
-            //await verification.manageDialog(message, thisVerUser);; // !! проверить логику в отладчике     work version
 
             if (thisVerMember.isCorrectAnswer(message.content)) {
-                if (thisVerMember.editingId === -1) { // !! ~
+                if (~thisVerMember.editingId) await thisVerMember.editInfo(message.content);
+                else {
                     thisVerMember.saveAnswer(message.content);
-                    if (thisVerMember.phase.id === 8) thisVerMember.startInfoConfirmation();
+                    if (thisVerMember.phase.name === 'confirmInfo') thisVerMember.startInfoConfirmation();
                     else thisVerMember.startNextPhase();
                 }
-                else await thisVerMember.editInfo(message.content);
             }
-            else if (thisVerMember.phase.regexp === '') message.reply(thisVerMember.lang === 'ru' ? 'Воспользуйся кнопками' : 'Use buttons'); // !! в самом начале языка нет
+            else if (thisVerMember.phase.regexp === '') message.reply(thisVerMember.lang === 'ru' ? 'Воспользуйся кнопками' : 'Use buttons');
             else message.reply(thisVerMember.lang === 'ru' ? 'Ответ не соответствует требованиям (посмотри подсказку под сообщением с вопросом)' : 'Wrong answer');
         }
     }
