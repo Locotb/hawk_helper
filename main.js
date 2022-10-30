@@ -29,8 +29,7 @@ const config = require('./config.json');
 const fs = require('fs'); // Подключаем родной модуль файловой системы node.js  
 const { createReadStream } = require('fs');
 const manageGameRoles = require('./gameRoles.js');
-// const verification = require('./verification.js');
-const verificationClasses = { Verification, Recruit_Verification, Ally_Verification, Ambassador_Verification } = require('./verificationNew.js');
+const verificationClasses = { Verification, Recruit_Verification, Ally_Verification, Ambassador_Verification } = require('./verification.js');
 const gameEvents = require('./gameEvents.js');
 const { ListenedMember } = require('./channelsListening.js');
 const commands = require('./commands.js');
