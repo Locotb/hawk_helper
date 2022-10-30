@@ -19,7 +19,7 @@ const robot = new Client({
 const comms = require("./comms.js"); // Подключаем файл с командами для бота
 const mysql = require('mysql2/promise');
 
-const { token, prefix, mysqlConfig } = require('./config.json');
+const config = require('./config.json');
 
 // const config = require('./config.json'); // Подключаем файл с параметрами и информацией
 // const mysqlConfig = config.mysql;
@@ -32,7 +32,7 @@ const manageGameRoles = require('./gameRoles.js');
 // const verification = require('./verification.js');
 const verificationClasses = { Verification, Recruit_Verification, Ally_Verification, Ambassador_Verification } = require('./verificationNew.js');
 const gameEvents = require('./gameEvents.js');
-const channelsListening = require('./channelsListening.js');
+const { ListenedMember } = require('./channelsListening.js');
 const commands = require('./commands.js');
 
 const { join } = require('path');
@@ -70,7 +70,7 @@ robot.once('ready', async () => {
 
     robot.user.setActivity('!help', { type: 'WATCHING' });
 
-    const connection = await mysql.createConnection(mysqlConfig);
+    const connection = await mysql.createConnection(config.mysqlConfig);
     let response = await connection.execute(`SELECT * FROM event_settings`);
     if (response[0][0] && response[0][0].eventName) eventSettings.isEventNow = true;
 
@@ -83,6 +83,20 @@ robot.once('ready', async () => {
     infoChannel.fetchInvites().then(channelInvites => {
         invites = channelInvites;
     });
+
+    let tGuild = await robot.guilds.fetch(config.guildId);
+
+    robot.specChannels = {
+        logs: null,
+        verification: null,
+        registration: null,
+        recruitWelcome: null,
+        information: null,
+        chronicle: null,
+        test: null,
+    };
+
+    for (let chnl in config.specChannels) robot.specChannels[chnl] = await tGuild.channels.fetch(config.specChannels[chnl]);
 });
 
 robot.on('interactionCreate', async interaction => {
@@ -140,7 +154,7 @@ robot.on('channelDelete', async channel => {
 
     if (~listenedChannelIndex) {
         listenedChannelsIds.splice(listenedChannelIndex, 1);
-        const connection = await mysql.createConnection(mysqlConfig);
+        const connection = await mysql.createConnection(config.mysqlConfig);
         await connection.execute(`DELETE FROM listened_channels WHERE channelId=${channel.id}`); // авто инкремент не поправляется
         await connection.end();
         return;
@@ -189,64 +203,37 @@ robot.on('guildMemberRemove', async member => {
 // robot.on('error', err => {}); // !!
 
 
-robot.on('voiceStateUpdate', async (oldState, newState) => {
-
-    // let channelsIds = [
-    //     '480807623525007361', // берсерки
-    //     '544059704570150912', // беркуты
-    //     '398099895569088513', // ветераны
-    //     '911673341641916486', // капитаны
-    //     '911673379352870923', // предки
-    // ];
-    
-    let newRecVC = listenedChannelsIds.find(id => id === newState.channelId);
-    let oldRecVC = listenedChannelsIds.find(id => id === oldState.channelId);
-
-    let userRole; 
-    let rolesIds = [
-        '411942349753548800', 
-        '681420100565467157', 
-        '681410021463949322',  
-        '769887786806411274',
-        '684046420000374950', 
-        '684046428783378435', 
-        '684046480247488514',
-        '685130078098948099',
-        '685130164061208787', 
-        '685130169195036700',
-        '685130171040268414',
-        '685130172047163490', 
-        '685130173154066480', 
-        '687287277956890661',
-    ];
-
-    for (let i = 0; i < rolesIds.length; i++) {
-        let role = newState.member.roles.cache.get(rolesIds[i]);
-        if (!role) continue;
-        userRole = role.name;
-        break;
-    }
-
-    if (!userRole) return;
+robot.on('voiceStateUpdate', async (oldState, newState) => {    
+    let newRecVC = listenedChannelsIds.find(id => id === newState.channelId),
+        oldRecVC = listenedChannelsIds.find(id => id === oldState.channelId);
 
     let oldEventVC, newEventVC;
 
     if (eventSettings.isEventNow && newState.member.roles.cache.find(role => role.id === '786495891926024192') ) {
-        const connection = await mysql.createConnection(mysqlConfig);
-        let response = await connection.execute('SELECT voiceChannels FROM event_settings'); // SELECT voiceChannels FROM event_settings
+        const connection = await mysql.createConnection(config.mysqlConfig);
+        let response = await connection.execute('SELECT voiceChannels FROM event_settings');
         let eventChannels = response[0][0].voiceChannels.split(', ');
         oldEventVC = eventChannels.find(channel => channel === oldState.channelId);
         newEventVC = eventChannels.find(channel => channel === newState.channelId);
         await connection.end();
     }
     
-    if ( (newRecVC && !oldRecVC) || (newEventVC && !oldEventVC) ) channelsListening.f1(channelUsers, newState);
-    else if ( (!newRecVC && oldRecVC) || (!newEventVC && oldEventVC) ) {
-        let event = false;
-        if (!newEventVC && oldEventVC) event = true;
-        channelsListening.f2(channelUsers, userRole, newState, event, mysql, mysqlConfig);
+    if ( (newRecVC && !oldRecVC) || (newEventVC && !oldEventVC) ) {
+        let role = ListenedMember.getRole(newState.member.roles);
+        if (!role) return;
+        let listenedMember = new ListenedMember(newState, role);
+        channelUsers.push(listenedMember);
+        await listenedMember.onConnect(newState);
     }
-
+    else if ( (!newRecVC && oldRecVC) || (!newEventVC && oldEventVC) ) {
+        // let event = false;
+        // if (!newEventVC && oldEventVC) event = true;
+        let tMemberIndex = channelUsers.findIndex(listenedMember => listenedMember.id === newState.id);
+        if (~tMemberIndex) {
+            channelUsers[tMemberIndex].onDisconnect(newState);
+            channelUsers.splice(tMemberIndex, 1);
+        }
+    }
 });
 
 
@@ -275,7 +262,7 @@ robot.on('guildMemberAdd', async (member) => {
         newVerMember.create(member);
     }
     else {
-        const connection = await mysql.createConnection(mysqlConfig);
+        const connection = await mysql.createConnection(config.mysqlConfig);
         let response = await connection.execute(`SELECT * FROM event_settings`); // !!
         let inviteCode = response[0][0].inviteCode;
         await connection.end();
@@ -554,7 +541,7 @@ robot.on('messageCreate', async message => {
     if (message.content === '!event create2' && message.channelId === '411948808457682954' && !eventSettings.isEventNow) await gameEvents.f6(message, eventSettings);
     else if (message.author.id === eventSettings.creator && message.channelId === '411948808457682954') gameEvents.f5(message, eventSettings);
     
-    if (eventSettings.isEventNow && message.content === '!event end2' && message.channelId === '411948808457682954') gameEvents.f4(message, mysql, mysqlConfig, eventSettings)
+    if (eventSettings.isEventNow && message.content === '!event end2' && message.channelId === '411948808457682954') gameEvents.f4(message, mysql, config.mysqlConfig, eventSettings)
     if (registrationUsers[0]) gameEvents.f7(message, registrationUsers);
 
 
@@ -816,7 +803,7 @@ robot.on('messageReactionAdd', async (reaction, user) => {
 
     // if (registrationUsers[0] || eventSettings[0]) {
         if (reaction.message.channelId === '819486790531809310') gameEvents.f2(reaction, user, registrationUsers);
-        if (reaction.message.channelId === '411948808457682954' && user.id === eventSettings.creator && eventSettings.phase === 3 ) gameEvents.f3(reaction, eventSettings, mysql, mysqlConfig);
+        if (reaction.message.channelId === '411948808457682954' && user.id === eventSettings.creator && eventSettings.phase === 3 ) gameEvents.f3(reaction, eventSettings, mysql, config.mysqlConfig);
     // }
 
     if (eventSettings.isEventNow && reaction.emoji.name === '🚩' && reaction.message.channelId === '786499159679041536') gameEvents.f8(reaction, user, registrationUsers);
@@ -1132,7 +1119,7 @@ robot.on('messageCreate', (msg) => { // Реагирование на сообщ
     var comm_name = comm.slice(0, comm.indexOf(" "));
     var messArr = comm.split(" ");
     for (comm_count in comms.comms) {
-        var comm2 = prefix + comms.comms[comm_count].name;
+        var comm2 = config.prefix + comms.comms[comm_count].name;
     if (comm2 == comm_name) {
         comms.comms[comm_count].out(robot, msg, messArr);
         }
@@ -1140,6 +1127,6 @@ robot.on('messageCreate', (msg) => { // Реагирование на сообщ
     }
 });
 
-robot.login(token);
+robot.login(config.token);
 
-// module.exports.robot = robot;
+module.exports.robot = robot;
