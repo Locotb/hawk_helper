@@ -46,30 +46,21 @@ class ListenedMember {
         let timeInChannel = Math.trunc( (this.disconnectionTime - this.connectionTime)/1000 );
 
         let userName = newState.member.user.username;
-        await  m.robot.specChannels.logs.send(`[${new Date().toLocaleString('ru')}] ${userName} отключился\nВремя, которое ${userName} провел в голосовом канале: ${timeInChannel}`);
+        await m.robot.specChannels.logs.send(`[${new Date().toLocaleString('ru')}] ${userName} отключился\nВремя, которое ${userName} провел в голосовом канале: ${timeInChannel}`);
 
         const connection = await mysql.createConnection(mysqlConfig);
 
-        let response = await connection.execute(`SELECT * FROM time_online_test WHERE id=${newState.id}`);
-        let DBLastMonth = +response[1][6].name.match(/\d+/)[0];
+        // let response = await connection.execute(`SHOW COLUMNS FROM time_online_test LIKE 'time${month}'`);
+        let response = await connection.execute(`SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'time_online_test'`);
+        let DBLastMonth = +response[0].at(-1).match(/\d+/)[0];
         let month = new Date().getMonth();
 
-        if (month !== DBLastMonth) {
-            await this.updateDB(DBLastMonth, response, connection);
-            response = await connection.execute(`SELECT * FROM time_online_test WHERE id=${newState.id}`);
-        }
-
-        let userData = response[0][0];
-
-        if (!userData) {
-            await connection.execute(`INSERT INTO time_online_test (id, name, tag, role, totalTime, time${month === 0 ? 11 : month - 1}, time${month}) VALUES ('${newState.id}', '${userName}', '${newState.member.user.discriminator}', '${this.role}', ${timeInChannel}, 0, ${timeInChannel})`);
-            return;
-        }
-
-        let tableTime = userData[`time${month}`] + timeInChannel;
-        let tableTotalTime = userData.totalTime + timeInChannel; 
-
-        await connection.execute(`UPDATE time_online_test SET name='${userName}', tag='${newState.member.user.discriminator}', role='${this.role}', totalTime=${tableTotalTime}, time${month}=${tableTime} WHERE id=${this.id}`);
+        if (month !== DBLastMonth) await this.updateDB(DBLastMonth, response, connection);
+    
+        await connection.execute(`INSERT INTO time_online_test 
+            (id, name, tag, role, totalTime, time${month === 0 ? 11 : month - 1}, time${month}) 
+            VALUES ('${newState.id}', '${userName}', '${newState.member.user.discriminator}', '${this.role}', ${timeInChannel}, 0, ${timeInChannel}) 
+            ON DUPLICATE KEY UPDATE name = '${userName}', tag = '${newState.member.user.discriminator}', role = '${this.role}', totalTime = totalTime + ${timeInChannel}, time${month} = time${month} + ${timeInChannel}`);
 
         if (event) { // !!
             let response = await connection.execute(`SELECT * FROM participants WHERE id=${newState.id}`);
