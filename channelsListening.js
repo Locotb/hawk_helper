@@ -49,14 +49,8 @@ class ListenedMember {
         await m.robot.specChannels.logs.send(`[${new Date().toLocaleString('ru')}] ${userName} отключился\nВремя, которое ${userName} провел в голосовом канале: ${timeInChannel}`);
 
         const connection = await mysql.createConnection(mysqlConfig);
-
-        // let response = await connection.execute(`SHOW COLUMNS FROM time_online_test LIKE 'time${month}'`);
-        let response = await connection.execute(`SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'time_online_test'`);
-        let DBLastMonth = +response[0].at(-1).match(/\d+/)[0];
         let month = new Date().getMonth();
 
-        if (month !== DBLastMonth) await this.updateDB(DBLastMonth, response, connection);
-    
         await connection.execute(`INSERT INTO time_online_test 
             (id, name, tag, role, totalTime, time${month === 0 ? 11 : month - 1}, time${month}) 
             VALUES ('${newState.id}', '${userName}', '${newState.member.user.discriminator}', '${this.role}', ${timeInChannel}, 0, ${timeInChannel}) 
@@ -73,22 +67,6 @@ class ListenedMember {
         }
 
         await connection.end(); 
-    }
-
-    async updateDB(DBLastMonth, response, connection) {
-        let month = new Date().getMonth();
-    
-        if (month - DBLastMonth !== -11 || month - DBLastMonth !== 1 ) { // если было пропущено обновление таблицы
-            await connection.execute(`ALTER TABLE time_online_test DROP COLUMN ${response[1][5].name}, DROP COLUMN ${response[1][6].name}, ADD COLUMN time${month === 0 ? 11 : month - 1} INT(10) UNSIGNED DEFAULT 0`);
-        }
-        else if (month === 0 || month === 1) { // если начался новый год, удаление ноябрьского/декабрьского столбца
-            await connection.execute(`ALTER TABLE time_online_test DROP COLUMN time${month + 10}`);
-        } 
-        else {
-            await connection.execute(`ALTER TABLE time_online_test DROP COLUMN time${month - 2}`);
-        }
-
-        await connection.execute(`ALTER TABLE time_online_test ADD COLUMN time${month} INT UNSIGNED DEFAULT 0`);
     }
 }
 

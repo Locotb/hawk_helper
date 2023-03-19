@@ -98,6 +98,7 @@ robot.once('ready', async () => {
     for (let chnl in config.specChannels) robot.specChannels[chnl] = await tGuild.channels.fetch(config.specChannels[chnl]);
 });
 
+
 robot.on('interactionCreate', async interaction => {
 	if ( interaction.isCommand() ) {
         const { commandName } = interaction;
