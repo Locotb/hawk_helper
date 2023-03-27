@@ -226,11 +226,9 @@ robot.on('voiceStateUpdate', async (oldState, newState) => {
         await listenedMember.onConnect(newState);
     }
     else if ( (!newRecVC && oldRecVC) || (!newEventVC && oldEventVC) ) {
-        // let event = false;
-        // if (!newEventVC && oldEventVC) event = true;
         let tMemberIndex = channelUsers.findIndex(listenedMember => listenedMember.id === newState.id);
         if (~tMemberIndex) {
-            channelUsers[tMemberIndex].onDisconnect(newState);
+            channelUsers[tMemberIndex].onDisconnect(newState, !!(!newEventVC && oldEventVC));
             channelUsers.splice(tMemberIndex, 1);
         }
     }

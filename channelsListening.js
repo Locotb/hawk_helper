@@ -41,7 +41,7 @@ class ListenedMember {
         await m.robot.specChannels.logs.send(`[${new Date().toLocaleString('ru')}] ${newState.member.user.username} подключился`);
     }
 
-    async onDisconnect(newState, event) {
+    async onDisconnect(newState, isEventParticipant) {
         this.disconnectionTime = Date.now();
         let timeInChannel = Math.trunc( (this.disconnectionTime - this.connectionTime)/1000 );
 
@@ -56,17 +56,13 @@ class ListenedMember {
             VALUES ('${newState.id}', '${userName}', '${newState.member.user.discriminator}', '${this.role}', ${timeInChannel}, 0, ${timeInChannel}) 
             ON DUPLICATE KEY UPDATE name = '${userName}', tag = '${newState.member.user.discriminator}', role = '${this.role}', totalTime = totalTime + ${timeInChannel}, time${month} = time${month} + ${timeInChannel}`);
 
-        if (event) { // !!
-            let response = await connection.execute(`SELECT * FROM participants WHERE id=${newState.id}`);
-            if (!response[0][0]) {
-                await connection.execute(`INSERT INTO participants (id, name, time) VALUES ('${newState.id}', '${newState.member.user.username}', 0)`);
-                response = await connection.execute(`SELECT * FROM participants WHERE id=${newState.id}`);
-            }
-            let tableTime = response[0].time + timeInChannel;
-            await connection.execute(`UPDATE participants SET name='${newState.member.user.username}', time=${tableTime} WHERE id=${this.id}`);
+        if (isEventParticipant) {
+            await connection.execute(`INSERT INTO participants 
+                (id, name, time) VALUES ('${newState.id}', '${userName}', ${timeInChannel}) 
+                ON DUPLICATE KEY UPDATE name = '${userName}', time = time + ${timeInChannel}`);
         }
 
-        await connection.end(); 
+        await connection.end();
     }
 }
 
