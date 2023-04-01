@@ -4,7 +4,7 @@
     "@discordjs/rest": "^0.2.0-canary.0",
     "@discordjs/voice": "^0.7.5",
     "discord-api-types": "^0.26.1",
-    "discord.js": "^13.10.3",
+    "discord.js": "^14.8.0",
     "ffmpeg-static": "^4.4.0",
     "libsodium-wrappers": "^0.7.9",
     "mysql2": "^2.3.3"

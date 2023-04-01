@@ -1,14 +1,15 @@
-const { Client, VoiceChannel, Intents } = require('discord.js');
+const { Client, VoiceChannel, GatewayIntentBits } = require('discord.js');
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const robot = new Client({ 
+const robot = new Client({
     intents: [
-        Intents.FLAGS.GUILDS, 
-        Intents.FLAGS.GUILD_MESSAGES, 
-        Intents.FLAGS.DIRECT_MESSAGES, 
-        Intents.FLAGS.GUILD_MEMBERS, 
-        Intents.FLAGS.GUILD_PRESENCES, 
-        Intents.FLAGS.GUILD_MESSAGE_REACTIONS, 
-        Intents.FLAGS.GUILD_VOICE_STATES,
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.DirectMessages, 
+        GatewayIntentBits.MessageContent, 
+        GatewayIntentBits.GuildMembers, 
+        GatewayIntentBits.GuildPresences, 
+        GatewayIntentBits.GuildMessageReactions, 
+        GatewayIntentBits.GuildVoiceStates,
     ],
     partials: [
         'MESSAGE', 
@@ -107,7 +108,12 @@ robot.on('interactionCreate', async interaction => {
         else if (commandName === 'notice') await commands.notice(interaction);
         else if (commandName === 'createlistenedchannel') await commands.createListenedChannel(interaction, listenedChannelsIds);
     }
-    else if (interaction.isButton() && verificationUsers[0]) {
+    else if (interaction.isButton() && interaction.channelId === '767326891291049994' && interaction.member.id === eventSettings.creator) { // !! id канала заменен на тестовый
+        if (interaction.customId === 'confirm') await gameEvents.onConfirmSettings(interaction, eventSettings);
+        else if (interaction.customId === 'deny') await gameEvents.onDenySettings(interaction, eventSettings);
+        else if (interaction.customId === '1' || interaction.customId === '2' || interaction.customId === '3') await gameEvents.startEditing(interaction, eventSettings);
+    }
+    else if (interaction.isButton() && verificationUsers[0]) { // !! доработать проверку
         //let thisVerUser = verificationUsers.find(verUser => verUser.userId === interaction.member.id); work version
         let thisVerMember = verificationUsers.find(verMember => (verMember.id === interaction.member.id) && (verMember.channel.id === interaction.channelId));
 
@@ -145,7 +151,6 @@ robot.on('interactionCreate', async interaction => {
         }
         else if (interaction.customId.match(/param/)) await thisVerMember.startEditing(interaction);
     }
-
 });
 
 
@@ -536,10 +541,11 @@ robot.on('messageCreate', async message => {
         console.log('===================================================================================================\n');
         return;
     }
-    if (message.content === '!event create2' && message.channelId === '411948808457682954' && !eventSettings.isEventNow) await gameEvents.f6(message, eventSettings);
-    else if (message.author.id === eventSettings.creator && message.channelId === '411948808457682954') gameEvents.f5(message, eventSettings);
+
+    if (message.content === '!event create2' && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994') && !eventSettings.isEventNow) await gameEvents.f6(message, eventSettings);
+    else if (message.author.id === eventSettings.creator && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994')) gameEvents.f5(message, eventSettings);
     
-    if (eventSettings.isEventNow && message.content === '!event end2' && message.channelId === '411948808457682954') gameEvents.f4(message, mysql, config.mysqlConfig, eventSettings)
+    if (eventSettings.isEventNow && message.content === '!event end2' && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994')) gameEvents.f4(message, mysql, config.mysqlConfig, eventSettings)
     if (registrationUsers[0]) gameEvents.f7(message, registrationUsers);
 
 
@@ -801,7 +807,7 @@ robot.on('messageReactionAdd', async (reaction, user) => {
 
     // if (registrationUsers[0] || eventSettings[0]) {
         if (reaction.message.channelId === '819486790531809310') gameEvents.f2(reaction, user, registrationUsers);
-        if (reaction.message.channelId === '411948808457682954' && user.id === eventSettings.creator && eventSettings.phase === 3 ) gameEvents.f3(reaction, eventSettings, mysql, config.mysqlConfig);
+        // if ((reaction.message.channelId === '411948808457682954' || reaction.message.channelId === '767326891291049994') && user.id === eventSettings.creator && eventSettings.phase === 3 ) gameEvents.f3(reaction, eventSettings, mysql, config.mysqlConfig);
     // }
 
     if (eventSettings.isEventNow && reaction.emoji.name === '🚩' && reaction.message.channelId === '786499159679041536') gameEvents.f8(reaction, user, registrationUsers);

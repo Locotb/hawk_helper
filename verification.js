@@ -1,4 +1,4 @@
-const { MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, PermissionFlagsBits, ChannelType, ButtonStyle } = require('discord.js');
 const phrases = require('./phrases.json');
 const sendPM = require('./sendPM.js');
 
@@ -34,20 +34,20 @@ class Verification {
         let permissions = [
             {
                 id: member.id,
-                allow: ['VIEW_CHANNEL', 'SEND_MESSAGES', 'READ_MESSAGE_HISTORY'],
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
             },
             {
                 id: '911932147948990535', // bot's permissions
-                allow: ['VIEW_CHANNEL'],
+                allow: [PermissionFlagsBits.ViewChannel],
             },
             {
                 id: member.guild.roles.everyone,
-                deny: ['VIEW_CHANNEL'],
+                deny: [PermissionFlagsBits.ViewChannel],
             },
         ];
 
         let parent = await member.guild.channels.fetch('416584939413438475'); // категория "информация"
-        this.channel = await member.guild.channels.create(`❗${member.user.username} верификация`, { type: 'GUILD_TEXT', parent: parent, permissionOverwrites: permissions });
+        this.channel = await member.guild.channels.create({ name: `❗${member.user.username} верификация`, type: ChannelType.GuildText, parent: parent, permissionOverwrites: permissions });
 
         await member.roles.add('685130173670096907'); // новобранец
 
@@ -55,7 +55,7 @@ class Verification {
     }
 
     async startLangChoice(interaction) {
-        let content = '', btns = [], btnsIds = ['ru', 'eng'], btnsLabes = ['', ''], btnsEmojis = ['🇷🇺', '🇬🇧'], btnsStyles = ['SECONDARY', 'SECONDARY'];
+        let content = '', btns = [], btnsIds = ['ru', 'eng'], btnsLabes = ['', ''], btnsEmojis = ['🇷🇺', '🇬🇧'], btnsStyles = [ButtonStyle.Secondary, ButtonStyle.Secondary];
 
         this.setPhase('langChoice');
         btns = this.createBtns(btnsIds, btnsLabes, btnsEmojis, btnsStyles, []);
@@ -83,13 +83,13 @@ class Verification {
             btnsIds.push('recruit');
             btnsLabels.push('');
             btnsEmojis.push('🦅');
-            btnsStyles.push('SECONDARY');
+            btnsStyles.push(ButtonStyle.Secondary);
         }
 
         btnsIds.push('ally', 'ambassador', 'cancel');
         btnsLabels.push('', '', '');
         btnsEmojis.push('620724518717227009', '🕊️', '↩️');
-        btnsStyles.push('SECONDARY', 'SECONDARY', 'PRIMARY');
+        btnsStyles.push(ButtonStyle.Secondary, ButtonStyle.Secondary, ButtonStyle.Secondary);
     
         msg = this.getPhrase(this.phase.name);
         btns = this.createBtns(btnsIds, btnsLabels, btnsEmojis, btnsStyles, []);
@@ -141,10 +141,10 @@ class Verification {
 
             btnsIds.push(`param${i}`);
             btnsLabels.push('');
-            btnsStyles.push('SECONDARY');
+            btnsStyles.push(ButtonStyle.Secondary);
         });
 
-        const verificationForm = new MessageEmbed()
+        const verificationForm = new EmbedBuilder()
             .setColor(this.role === 'recruit' ? '#75c482' : '#AD1457')
             .setTitle(`:exclamation: ${this.lang === 'ru' ? 'Подтверждение информации' : 'Confirmation of information'} :exclamation:`)
             .setFooter({ text: 'Hawkband Clan' })
@@ -158,12 +158,12 @@ class Verification {
     }
 
     async sendFormToAdmins(interaction) {
-        await this.channel.permissionOverwrites.edit(this.id, { SEND_MESSAGES: false });
+        await this.channel.permissionOverwrites.edit(this.id, { SendMessages: false });
         await interaction.editReply(this.getPhrase('application_sended') + interaction.member.nickname);
 
         await this.disableBtns(this.lastBotMsg);
 
-        const verificationForm = new MessageEmbed()
+        const verificationForm = new EmbedBuilder()
             .setColor(this.role === 'recruit' ? '#75c482' : '#AD1457')
             .setTitle(`:envelope_with_arrow: Новая заявка на верификацию ${this.role === 'recruit' ? ':eagle:' : '<:notwar:620724518717227009>'}`)
             .setFooter({ text: 'Hawkband Clan' })
@@ -245,29 +245,30 @@ class Verification {
     createBtns(idsArr, labelsArr, emojisArr, stylesArr, rows) {
         let btns = [];
         for (let i = 0; i < (idsArr.length > 5 ? 5 : idsArr.length); i++) { // max 5 btns in a raw
-            btns.push(new MessageButton()
+            btns.push(new ButtonBuilder()
                 .setCustomId(idsArr[i])
-                .setLabel(labelsArr[i])
                 .setEmoji(emojisArr[i])
                 .setStyle(stylesArr[i]));
+
+            if (labelsArr[i].length > 0) btns[i].setLabel(labelsArr[i]);
         }
 
         idsArr.splice(0, 5);
         labelsArr.splice(0, 5);
         emojisArr.splice(0, 5);
         stylesArr.splice(0, 5);
-        rows.push(new MessageActionRow().addComponents(...btns));
+        rows.push(new ActionRowBuilder().addComponents(...btns));
 
         if (idsArr.length > 0) return this.createBtns(idsArr, labelsArr, emojisArr, stylesArr, rows);
         else return rows;
     }
 
     createOkNoBtns(okId, noId) {
-        return this.createBtns([okId, noId], ['', ''], ['✔️', '✖️'], ['SUCCESS', 'DANGER'], []);
+        return this.createBtns([okId, noId], ['', ''], ['✔️', '✖️'], [ButtonStyle.Success, ButtonStyle.Danger], []);
     }
 
     createCancelBtn() {
-        return this.createBtns(['cancel'], [''], ['↩️'], ['PRIMARY'], []);
+        return this.createBtns(['cancel'], [''], ['↩️'], [ButtonStyle.Primary], []);
     }
 
     async disableBtns(msg) {
@@ -275,10 +276,11 @@ class Verification {
     
         msg.components.forEach(btnsRow => {
             btnsRow.components.forEach(btn => {
+                btn = ButtonBuilder.from(btn);
                 btn.setDisabled(true);
                 btns.push(btn);
             });
-            rows.push(new MessageActionRow().addComponents(...btns));
+            rows.push(new ActionRowBuilder().addComponents(...btns));
             btns = [];
         });
     

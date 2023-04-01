@@ -1,3 +1,104 @@
+const { ActionRowBuilder, ButtonBuilder, EmbedBuilder, ButtonStyle } = require('discord.js');
+const mysql = require('mysql2/promise');
+const { mysqlConfig } = require('./config.json');
+
+
+const test = {
+
+};
+
+
+class Registration {
+    static createBtns(idsArr, labelsArr, emojisArr, stylesArr, rows) {
+        let btns = [];
+        for (let i = 0; i < (idsArr.length > 5 ? 5 : idsArr.length); i++) { // max 5 btns in a raw
+            btns.push(new ButtonBuilder()
+                .setCustomId(idsArr[i])
+                .setEmoji(emojisArr[i])
+                .setStyle(stylesArr[i]));
+
+            if (labelsArr[i].length > 0) btns[i].setLabel(labelsArr[i]);
+        }
+    
+        idsArr.splice(0, 5);
+        labelsArr.splice(0, 5);
+        emojisArr.splice(0, 5);
+        stylesArr.splice(0, 5);
+        rows.push(new ActionRowBuilder().addComponents(...btns));
+    
+        if (idsArr.length > 0) return this.createBtns(idsArr, labelsArr, emojisArr, stylesArr, rows);
+        else return rows;
+    }
+
+    static createOkNoBtns(okId, noId) {
+        return this.createBtns([okId, noId], ['', ''], ['✔️', '✖️'], [ButtonStyle.Success, ButtonStyle.Danger], []);
+    }
+
+    static async disableBtns(msg) {
+        let btns = [], rows = [];
+    
+        msg.components.forEach(btnsRow => {
+            btnsRow.components.forEach(btn => {
+                btn = ButtonBuilder.from(btn);
+                btn.setDisabled(true);
+                btns.push(btn);
+            });
+            rows.push(new ActionRowBuilder().addComponents(...btns));
+            btns = [];
+        });
+    
+        if (msg.content && !msg.embeds) await msg.edit({ content: msg.content, components: rows });
+        else if (!msg.content && msg.embeds) await msg.edit({ embeds: msg.embeds, components: rows });
+        else if (msg.content && msg.embeds) await msg.edit({ content: msg.content, embeds: msg.embeds, components: rows });
+    }
+
+
+    constructor(member) {
+        this.id = member.id;
+        this.channel = null;
+        this.phase = 0;
+    }
+
+    async create(member) {
+        let permissions = [
+            {
+                id: member.id,
+                allow: ['VIEW_CHANNEL', 'SEND_MESSAGES', 'READ_MESSAGE_HISTORY'],
+            },
+            {
+                id: '911932147948990535', // bot's permissions
+                allow: ['VIEW_CHANNEL'],
+            },
+            {
+                id: member.guild.roles.everyone,
+                deny: ['VIEW_CHANNEL'],
+            },
+        ];
+
+        let parent = await member.guild.channels.fetch('416584939413438475'); // категория "информация"
+        this.channel = await member.guild.channels.create(`❗${member.user.username} registration`, { type: 'GUILD_TEXT', parent: parent, permissionOverwrites: permissions });
+
+        await member.roles.add('411968125869752340'); // ambassador
+    }
+}
+
+
+class EventCreation {
+    constructor() {
+        this.creatorId = ''; // msg.author.id;
+        this.phase = 0;
+        this.eventName = '';
+        this.rewardName = '';
+        this.voiceChannels = '';
+    }
+
+    async begin() {
+        await msg.channel.send('Процесс создания ивента запущен!');
+        await msg.channel.send('Название ивента:');
+    }
+}
+
+
 async function createRegistration(member, registrationUsers) {
     let permissions = [
         {
@@ -110,6 +211,50 @@ async function f2(reaction, user, registrationUsers) {
     }
 }
 
+async function onConfirmSettings(interaction, eventSettings) {
+    // let textChannel = await interaction.guild.channels.fetch('411948808457682954');
+    // let regChannel = await interaction.guild.channels.fetch('819486790531809310');
+    // let infoChannel = await interaction.guild.channels.fetch('786499159679041536');
+    // let eventCategory = await interaction.guild.channels.fetch('786495165731831818');
+
+    // await regChannel.send(`**Открыта регистрация на ивент "${eventSettings.eventName}"**`);
+    // await eventCategory.setName(eventSettings.eventName);
+    // await interaction.guild.roles.create({
+    //     name: `♠️ ${eventSettings.rewardName} ♠️`,
+    //     color: 'AQUA',
+    //     position: 4 // !! уточнить позицию
+    // });
+
+    // let inviteURL = await infoChannel.createInvite({
+    //     maxAge: 0
+    // });
+    let inviteURL = { code: 'test' };
+
+    // await textChannel.send(inviteURL.toString());
+
+    await interaction.reply(`Ивент **${eventSettings.eventName}** успешно создан! Специальная ссылка-приглашение: ${inviteURL.code}`);
+
+    const connection = await mysql.createConnection(mysqlConfig);
+    await connection.execute(`INSERT INTO event_settings (eventName, rewardName, inviteCode, voiceChannels) VALUES ('${eventSettings.eventName}', '${eventSettings.rewardName}', '${inviteURL.code}', '${eventSettings.voiceChannels}')`);
+    await connection.end();  
+
+    eventSettings = { isEventNow: true };
+    await Registration.disableBtns(interaction.message);
+}
+
+async function onDenySettings(interaction, eventSettings) {
+    eventSettings = {};
+    await interaction.reply('Создание ивента было отменено.');
+    await Registration.disableBtns(interaction.message);
+}
+
+async function startEditing(interaction, eventSettings) {
+    await Registration.disableBtns(interaction.message);
+    editingId = +interaction.customId.match(/\d/)[0];
+    eventSettings.phase += editingId;
+    await interaction.reply(`Укажите новое значение для [${editingId}]`);
+}
+
 async function f3(reaction, eventSettings, mysql, mysqlConfig) {
     if (reaction.emoji.name === '✅') { 
         let textChannel = await reaction.message.guild.channels.fetch('411948808457682954');
@@ -153,7 +298,7 @@ async function f3(reaction, eventSettings, mysql, mysqlConfig) {
         eventSettings.phase = 6;
     }
     else if (reaction.emoji.name === '❌') { 
-        eventSettings = [];
+        eventSettings = {};
         await reaction.message.channel.send('Создание ивента было отменено.');
     }
 }
@@ -223,12 +368,10 @@ async function f4(message, mysql, mysqlConfig, eventSettings) {
 
 
 async function showSettings(message, eventSettings) {
-
-    const { MessageEmbed } = require('discord.js');
-    const eventSettingsForm = new MessageEmbed()
+    const eventSettingsForm = new EmbedBuilder()
             .setColor('#e74c3c')
             .setTitle(':gear: Настройки ивента :gear:')
-            .setFooter('Hawkband Clan')
+            .setFooter({ text: 'Hawkband Clan' })
             .setTimestamp()
             .setThumbnail(message.guild.iconURL())
             .addFields(
@@ -236,12 +379,12 @@ async function showSettings(message, eventSettings) {
                 {name: ' :military_medal: Название награды [2]:', value: eventSettings.rewardName, inline: true},
                 {name: ' :loud_sound: Список голосовых каналов [3]:', value: eventSettings.voiceChannels, inline: false}
             );
-    let msg = await message.channel.send({ embeds: [eventSettingsForm] });
-    await msg.react('✅');
-    await msg.react('1️⃣');
-    await msg.react('2️⃣');
-    await msg.react('3️⃣');
-    await msg.react('❌');
+
+    const btns = Registration.createBtns(['1', '2', '3'], ['', '', ''], ['1️⃣', '2️⃣', '3️⃣'], [ButtonStyle.Secondary, ButtonStyle.Secondary, ButtonStyle.Secondary], []);
+    const btns2 = Registration.createOkNoBtns('confirm', 'deny');
+    btns.push(...btns2);
+
+    await message.channel.send({ embeds: [eventSettingsForm], components: btns });
 }
 
     
@@ -266,8 +409,7 @@ async function f7(msg, registrationUsers) {
         await msg.channel.send('Thanks for the reply! Your application for registration has been sent to the organizers. I\'ll let you know about their decision');
         thisRegUser.phase = 1;
 
-        const { MessageEmbed } = require('discord.js');
-        const registrationForm = new MessageEmbed()
+        const registrationForm = new EmbedBuilder()
             .setColor('#e74c3c')
             .setTitle(':envelope_with_arrow: Новая заявка на регистрацию :crossed_swords:')
             .setFooter('Hawkband Clan')
@@ -294,23 +436,12 @@ async function f5(message, eventSettings) {
         await message.channel.send('Список голосовых каналов:');
         eventSettings.phase = 2
     }
-    else if (eventSettings.phase === 2) {
-        eventSettings.voiceChannels = message.content;
-        eventSettings.phase = 3;
-        await showSettings(message, eventSettings);
-    }
-    else if (eventSettings.phase === 4) {
-        eventSettings.eventName = message.content;
-        eventSettings.phase = 3;
-        await showSettings(message, eventSettings);
-    }
-    else if (eventSettings.phase === 5) {
-        eventSettings.rewardName = message.content;
-        eventSettings.phase = 3;
-        await showSettings(message, eventSettings);
-    }
-    else if (eventSettings.phase === 6) {
-        eventSettings.voiceChannels = message.content;
+    else if (eventSettings.phase > 1) {
+        let editParam = '';
+        if (eventSettings.phase === 4) editParam = 'eventName';
+        else if (eventSettings.phase === 5) editParam = 'rewardName';
+        else if (eventSettings.phase === 2 || eventSettings.phase === 6) editParam = 'voiceChannels';
+        eventSettings[editParam] = message.content;
         eventSettings.phase = 3;
         await showSettings(message, eventSettings);
     }
@@ -360,8 +491,7 @@ async function f8(reaction, user, registrationUsers) {
         ];
         rolesArray.forEach(async (role) => {
             if ( memberRoles.find(memberRole => memberRole.id === role) ) {
-                const { MessageEmbed } = require('discord.js');
-                const registrationForm = new MessageEmbed()
+                const registrationForm = new EmbedBuilder()
                     .setColor('#e74c3c')
                     .setTitle(':envelope_with_arrow: Ястреб выступает вместе с нами :crossed_swords:')
                     .setDescription(`Ястреб <@${user.id}> заявил о своем желании сражаться на ивенте. Ему автоматически была выдана роль <@&786495891926024192>`)
@@ -379,6 +509,9 @@ async function f8(reaction, user, registrationUsers) {
 
 module.exports = {
     createRegistration: createRegistration,
+    onConfirmSettings: onConfirmSettings,
+    onDenySettings: onDenySettings,
+    startEditing: startEditing,
     f2: f2,
     f3: f3,
     f4: f4,

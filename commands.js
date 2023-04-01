@@ -1,4 +1,4 @@
-const { MessageEmbed } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const mysql = require('mysql2/promise');
 const { mysqlConfig } = require('./config.json');
 const updateDB = require('./channelsListening.js').updateDB;
@@ -11,7 +11,7 @@ async function data(interaction) {
         return;
     }
 
-    const dataForm = new MessageEmbed()
+    const dataForm = new EmbedBuilder()
         .setColor(interaction.member.roles.color.color)
         .setTitle(':bar_chart: Онлайн ястребов')
         .setFooter('Hawkband Clan');
