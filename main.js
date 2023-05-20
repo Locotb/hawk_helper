@@ -1,4 +1,4 @@
-const { Client, VoiceChannel, GatewayIntentBits } = require('discord.js');
+const { Client, VoiceChannel, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const robot = new Client({
     intents: [
@@ -12,9 +12,9 @@ const robot = new Client({
         GatewayIntentBits.GuildVoiceStates,
     ],
     partials: [
-        'MESSAGE', 
-        'CHANNEL', 
-        'REACTION',
+        Partials.Message, 
+        Partials.Channel, 
+        Partials.Reaction,
     ],
 });
 const comms = require("./comms.js"); // Подключаем файл с командами для бота
@@ -31,9 +31,11 @@ const fs = require('fs'); // Подключаем родной модуль фа
 const { createReadStream } = require('fs');
 const manageGameRoles = require('./gameRoles.js');
 const verificationClasses = { Verification, Recruit_Verification, Ally_Verification, Ambassador_Verification } = require('./verification.js');
-const gameEvents = require('./gameEvents.js');
 const { ListenedMember } = require('./channelsListening.js');
 const commands = require('./commands.js');
+const phrases = require('./phrases.json');
+const utils = require('./utils.js');
+const sendPM = require('./sendPM.js')
 
 const { join } = require('path');
 
@@ -45,8 +47,10 @@ let eventSettings = {
     isEventNow: false,
 };
 let invites;
+let eventCreation;
 
 const { createAudioPlayer, createAudioResource, StreamType, entersState, VoiceConnectionStatus, joinVoiceChannel } = require('@discordjs/voice');
+const { EventCreation, Registration } = require('./gameEvents.js');
 const player = createAudioPlayer();
 
 // Старое ↓
@@ -108,10 +112,16 @@ robot.on('interactionCreate', async interaction => {
         else if (commandName === 'notice') await commands.notice(interaction);
         else if (commandName === 'createlistenedchannel') await commands.createListenedChannel(interaction, listenedChannelsIds);
     }
-    else if (interaction.isButton() && interaction.channelId === '767326891291049994' && interaction.member.id === eventSettings.creator) { // !! id канала заменен на тестовый
-        if (interaction.customId === 'confirm') await gameEvents.onConfirmSettings(interaction, eventSettings);
-        else if (interaction.customId === 'deny') await gameEvents.onDenySettings(interaction, eventSettings);
-        else if (interaction.customId === '1' || interaction.customId === '2' || interaction.customId === '3') await gameEvents.startEditing(interaction, eventSettings);
+    else if (interaction.isButton() && interaction.channelId === '767326891291049994' && eventCreation) { // !! id канала заменен на тестовый
+        if (interaction.member.id !== eventCreation.creatorId) {
+            await interaction.reply({ content: `Эта кнопка предназначается для другого пользователя!`, ephemeral: true });
+            return;
+        }
+
+        if (interaction.customId === 'confirm') { await eventCreation.onConfirm(interaction); eventSettings.isEventNow = true; eventCreation = null; }
+        else if (interaction.customId === 'deny') { await eventCreation.onDeny(interaction); eventCreation = null }
+        else if (interaction.customId === 'eventName' || interaction.customId === 'rewardName' || interaction.customId === 'voiceChannels') await eventCreation.startEdit(interaction);
+        else if (interaction.customId === 'cancel_event') await eventCreation.onClickCancel(interaction);
     }
     else if (interaction.isButton() && verificationUsers[0]) { // !! доработать проверку
         //let thisVerUser = verificationUsers.find(verUser => verUser.userId === interaction.member.id); work version
@@ -119,8 +129,7 @@ robot.on('interactionCreate', async interaction => {
 
         // !! тестовый в проверке ниже
         if (!thisVerMember && interaction.channelId !== '767326891291049994') { // !! логика работает правильно до тех пор, пока кнопки есть только в верификации
-            await interaction.deferReply({ ephemeral: true });
-            await interaction.editReply(`Эта кнопка предназначается для другого пользователя!`);
+            await interaction.reply({ content: `Эта кнопка предназначается для другого пользователя!`, ephemeral: true });
             return;
         }
 
@@ -151,6 +160,50 @@ robot.on('interactionCreate', async interaction => {
         }
         else if (interaction.customId.match(/param/)) await thisVerMember.startEditing(interaction);
     }
+    else if (interaction.isButton() && registrationUsers[0]) {
+        let thisRegMember = registrationUsers.find(regMember => (regMember.id === interaction.member.id) && (regMember.channel.id === interaction.channelId));
+        
+        if (!thisRegMember && interaction.channelId !== '767326891291049994') {
+            await interaction.deferReply({ ephemeral: true });
+            await interaction.editReply(`Эта кнопка предназначается для другого пользователя!`);
+            return;
+        }
+
+        await interaction.deferReply();
+
+        if (thisRegMember) {
+            if (interaction.customId === 'ru' || interaction.customId === 'eng') await thisRegMember.onClickLangBtn(interaction);
+            else if (interaction.customId === 'clanName') await thisRegMember.startEdit(interaction);
+            else if (interaction.customId === 'confirm') await thisRegMember.onConfirmInfo(interaction);
+            else if (interaction.customId === 'deny') await thisRegMember.onDenyInfo(interaction);
+            else if (interaction.customId === 'cancel') await thisRegMember.onClickCancel(interaction);
+        }
+        else if (interaction.channelId === '767326891291049994') { // id канала регистрация заменен на тестовый !!
+            let regMemberId = interaction.message.embeds[0].fields.find(field => field.name === phrases.id_param_description.eng).value;
+            thisRegMember = registrationUsers.find(regMember => regMember.id === regMemberId);
+            let tMember = await interaction.guild.members.fetch(regMemberId);
+            
+            if (interaction.customId === 'confirm') {
+                await tMember.roles.add('786495891926024192'); // event warrior
+                await thisRegMember.channel.delete();
+                await utils.disableBtns(interaction.message);
+                await interaction.editReply(`Заявка была **одобрена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/${interaction.guild.id}/${interaction.channelId}/${interaction.message.id}`);
+                
+                let msg = `You have successfully registered for the event! All the necessary information is available in this channel:
+                \nhttps://discord.com/channels/394055433641263105/786499159679041536
+                \nGood luck and have fun! 🙃`;
+                await sendPM(msg, tMember.user, interaction.guild, 'об одобрении заявки на регистрацию');
+            }
+            else if (interaction.customId === 'deny') {
+                await thisRegMember.channel.delete();
+                await utils.disableBtns(interaction.message);
+                await interaction.editReply(`Заявка была **отклонена** пользователем ${interaction.user.username} (id ${interaction.user.id})\nСсылка на пост: https://discord.com/channels/${interaction.guild.id}/${interaction.channelId}/${interaction.message.id}`);
+                
+                let msg = `Unfortunately, your application for participation has been declined`;
+                await sendPM(msg, tMember.user, interaction.guild, 'об отказе заявки на регистрацию');
+            }
+        }
+    }
 });
 
 
@@ -167,6 +220,7 @@ robot.on('channelDelete', async channel => {
 
     if (verificationUsers[0]) {
         let verificationUserIndex = verificationUsers.findIndex(user => user.channel.id === channel.id);
+
         if (~verificationUserIndex) {
             verificationUsers.splice(verificationUserIndex, 1);
             return;
@@ -174,9 +228,10 @@ robot.on('channelDelete', async channel => {
     }
 
     if (registrationUsers[0]) {
-        let registrationUserIndex = registrationUsers.findIndex(user => user.channel === channel.id);
-        if (~registrationUserIndex) {
-            registrationUsers.splice(registrationUserIndex, 1);
+        let regUserIndex = registrationUsers.findIndex(user => user.channel.id === channel.id);
+
+        if (~regUserIndex) {
+            registrationUsers.splice(regUserIndex, 1);
             return;
         }
     }
@@ -187,19 +242,24 @@ robot.on('guildMemberRemove', async member => {
     if (verificationUsers[0]) {
         let verUserIndex = verificationUsers.findIndex(user => user.userId === member.id);
         if (~verUserIndex) {
-            if (verificationUsers[verUserIndex].phase.name === 'confirmInfo') verificationUsers[verUserIndex].onLeaveGuild();
+            if (verificationUsers[verUserIndex].phase.name === 'confirmInfo') verificationUsers[verUserIndex].onLeaveGuild(); // почему только в этой фазе?
             return;
         }
     }
+
     // !! добавить логику для случая, когда достигнута последняя фаза регистрации
     if (registrationUsers[0]) {
-        let registrationUserIndex = registrationUsers.findIndex(user => user.userId === member.id);
-        if (~registrationUserIndex) {
-            if (registrationUsers[registrationUserIndex].phase === 1) {
+        let regUserIndex = registrationUsers.findIndex(user => user.id === member.id);
+
+        if (~regUserIndex) {
+            if (registrationUsers[regUserIndex].curPhase.id === Registration.phases.tail.id) {
                 let regChannel = await member.guild.channels.fetch('819486790531809310');
                 await regChannel.send(`text`);
             }
-            registrationUsers.splice(registrationUserIndex, 1);
+
+            await registrationUsers[regUserIndex].channel.delete();
+
+            // registrationUsers.splice(regUserIndex, 1); // in channelDelete ↑
             return;
         }
     }
@@ -276,8 +336,8 @@ robot.on('guildMemberAdd', async (member) => {
         invites = channelInvites;
         const invite = channelInvites.find(i => ei.get(i.code).uses < i.uses);
 
-        if (invite && invite.code === inviteCode) await gameEvents.createRegistration(member, registrationUsers);
-        else await verification.createVerification(member, verificationUsers);
+        // if (invite && invite.code === inviteCode) await gameEvents.createRegistration(member, registrationUsers);
+        // else await verification.createVerification(member, verificationUsers);
     }
 });
 
@@ -510,7 +570,11 @@ robot.on('messageCreate', async message => {
         verificationUsers.push(verMember);
         verMember.create(message.member);
     }
-    if (message.content === '!test3' && message.channelId === '767326891291049994') await gameEvents.createRegistration(message.member, registrationUsers);
+    if (message.content === '!test3' && message.channelId === '767326891291049994') {
+        let regMember = new Registration(message.member);
+        registrationUsers.push(regMember);
+        regMember.create(message.member);
+    }
 
     if (verificationUsers[0]) {
         //let thisVerUser = verificationUsers.find(verUser => verUser.userId === message.author.id); work version          !! ?. ↓ из-за !test2, потом можно убрать
@@ -531,6 +595,13 @@ robot.on('messageCreate', async message => {
             else message.reply(thisVerMember.lang === 'ru' ? 'Ответ не соответствует требованиям (посмотри подсказку под сообщением с вопросом)' : 'Wrong answer');
         }
     }
+    if (registrationUsers[0]) {
+        let thisRegMember = registrationUsers.find(regMember => (regMember.id === message.member.id) && (regMember.channel?.id === message.channelId));
+
+        if (thisRegMember) {
+            await thisRegMember.onAnswer(message);
+        } 
+    }
     if (message.content === '!log2' && message.channelId === '767326891291049994') {
         console.log(`[${new Date().toLocaleString('ru')}] ${message.author.username} ввел !log. Массив verificationUsers на данный момент:\n`, verificationUsers);
         console.log('Массив channelUsers на данный момент:\n', channelUsers);
@@ -538,15 +609,69 @@ robot.on('messageCreate', async message => {
         console.log('Массив listenedChannelsIds на данный момент:\n', listenedChannelsIds);
         console.log('Объект eventSettings на данный момент:\n', eventSettings); // !! мб выводить еще из бд инфу?
         console.log('Состояние ивента: ', eventSettings.isEventNow);
+        console.log('Event creation: ', eventCreation);
         console.log('===================================================================================================\n');
         return;
     }
 
-    if (message.content === '!event create2' && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994') && !eventSettings.isEventNow) await gameEvents.f6(message, eventSettings);
-    else if (message.author.id === eventSettings.creator && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994')) gameEvents.f5(message, eventSettings);
+    if (message.content === '!event create2' && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994')) {
+        if (eventSettings.isEventNow) {
+            await message.reply(`В настоящий момент уже запущен другой ивент. Чтобы создать новый, необходимо завершить текущий.`);
+            return;
+        }
+        eventCreation = new EventCreation(message);
+        await eventCreation.begin();
+    }
+    else if (message.content === '!event end2' && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994')) {
+        if (!eventSettings.isEventNow) {
+            await message.reply(`В данный момент ивент не запущен`);
+            return;
+        }
+        
+        eventSettings.isEventNow = false;
+
+        let role = await message.guild.roles.fetch('786495891926024192'); // event warrior
+        const connection = await mysql.createConnection(config.mysqlConfig);
+
+        let response2 = await connection.execute(`SELECT * FROM event_settings`);
+
+        await message.reply(`Ивент **"${response2[0][0].eventName}"** был завершен`);
+
+        let response = await connection.execute(`SELECT * FROM participants`);
+        let rewardRole = message.guild.roles.cache.find(role => role.name === `♠️ ${response2[0][0].rewardName} ♠️`);
+        let msg = `Hi! On behalf of the Hawkband clan, thank you for participating in the event **"${response2[0][0].eventName}"**!`;
+
+        role.members.forEach(async member => {
+            await member.roles.remove('786495891926024192'); // event warrior
+
+            let tRecord = response[0].find(item => item.id === member.id);
+            if (tRecord.time > 1799) {
+                await member.roles.add(rewardRole);
+                await sendPM(msg, member.user, message.guild, 'о благодарности за участие в ивенте');
+            }
+        });
+
+        let infoChannel = await message.guild.channels.fetch('786499159679041536'); 
+        let invs = await infoChannel.fetchInvites();
+
+        invs.forEach(async invite => {
+            if (invite.code === response2[0][0].inviteCode) {
+                await invite.delete();
+                return;
+            }
+        });
+
+        await connection.execute(`TRUNCATE TABLE event_settings`);
+        await connection.execute(`TRUNCATE TABLE participants`);
+
+        await connection.end();
+    }
+    else if (eventCreation && !eventSettings.isEventNow && message.author.id === eventCreation.creatorId && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994') && eventCreation.curPhase.param) {
+        await eventCreation.onAnswer(message);
+    }
     
-    if (eventSettings.isEventNow && message.content === '!event end2' && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994')) gameEvents.f4(message, mysql, config.mysqlConfig, eventSettings)
-    if (registrationUsers[0]) gameEvents.f7(message, registrationUsers);
+    // if (eventSettings.isEventNow && message.content === '!event end2' && (message.channelId === '411948808457682954' || message.channelId === '767326891291049994')) gameEvents.f4(message, mysql, config.mysqlConfig, eventSettings)
+    // if (registrationUsers[0]) gameEvents.f7(message, registrationUsers);
 
 
     // if (message.content === `!delete ${message.content.match(/\d+/)}` && message.channel.id === '767326891291049994') {
@@ -805,12 +930,41 @@ robot.on('messageReactionAdd', async (reaction, user) => {
         //else if (reaction.message.channelId === '767326891291049994') verification.analyseDecision(reaction, user, verificationUsers); // верификация !!
     }
 
-    // if (registrationUsers[0] || eventSettings[0]) {
-        if (reaction.message.channelId === '819486790531809310') gameEvents.f2(reaction, user, registrationUsers);
-        // if ((reaction.message.channelId === '411948808457682954' || reaction.message.channelId === '767326891291049994') && user.id === eventSettings.creator && eventSettings.phase === 3 ) gameEvents.f3(reaction, eventSettings, mysql, config.mysqlConfig);
-    // }
+    if (eventSettings.isEventNow && reaction.emoji.name === '🚩' && reaction.message.channelId === '786499159679041536') {
+        let member = await reaction.message.guild.members.fetch(user.id), memberRoles = member.roles.cache, isNeedRegistration = true;
 
-    if (eventSettings.isEventNow && reaction.emoji.name === '🚩' && reaction.message.channelId === '786499159679041536') gameEvents.f8(reaction, user, registrationUsers);
+        let rolesIdsArray = [
+            '685131994069598227', // воины
+            '685131993955958838', // командиры
+            '685131993549373448', // старейшины
+            '913438180664041574', // союзники
+        ];
+
+        rolesIdsArray.forEach(async (roleId) => {
+            if ( memberRoles.get(roleId) ) {
+                // isNeedRegistration = false;
+                isNeedRegistration = true; // temporary for test
+                return;
+            }
+        });
+
+        if (isNeedRegistration) {
+            let regMember = new Registration(member);
+            registrationUsers.push(regMember);
+            await regMember.create(member);
+        } else {
+            const regForm = new EmbedBuilder()
+                    .setColor('#e74c3c')
+                    .setTitle(':envelope_with_arrow: Ястреб выступает вместе с нами :crossed_swords:')
+                    .setDescription(`Ястреб <@${user.id}> заявил о своем желании сражаться на ивенте. Ему автоматически была выдана роль <@&786495891926024192>`)
+                    .setFooter({ text: 'Hawkband Clan' })
+                    .setThumbnail(user.avatarURL()).setTimestamp();
+            
+            let regAdmChannel = await reaction.message.guild.channels.fetch('819486790531809310');
+            await regAdmChannel.send({ embeds: [regForm] });
+            await member.roles.add('786495891926024192'); // event warrior
+        }
+    }
 
     // if (reaction.message.channelId === '767326891291049994') manageGameRoles(reaction, user, 'add');
 });
@@ -873,10 +1027,10 @@ robot.on('messageReactionRemove', async (reaction, user) => {
 //         }
 //         else {
 //             let rolesArray = [
-//                 '685131993549373448',
-//                 '685131993955958838',
-//                 '685131994069598227',
-//                 '687287277956890661',
+//                 '685131993549373448', 685131994069598227 // воины
+//                 '685131993955958838',685131993955958838 // командиры
+//                 '685131994069598227',913438180664041574 // ally
+//                 '687287277956890661',685131993549373448 // старейшина
 //             ];
 //             rolesArray.forEach(async (role) => {
 //                 if ( memberRoles.find(memberRole => memberRole.id === role) ) {

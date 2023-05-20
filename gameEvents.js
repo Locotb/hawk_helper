@@ -1,100 +1,300 @@
-const { ActionRowBuilder, ButtonBuilder, EmbedBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ChannelType, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const utils = require('./utils.js');
 const mysql = require('mysql2/promise');
 const { mysqlConfig } = require('./config.json');
+const phrases = require('./phrases.json');
+const { Dialog } = require('./dialog.js');
 
 
-const test = {
+class PhasesList {
+    constructor() {
+        this.head = null;
+        this.tail = null;
+    }
 
-};
+    append(data) {
+        const newNode = data;
 
-
-class Registration {
-    static createBtns(idsArr, labelsArr, emojisArr, stylesArr, rows) {
-        let btns = [];
-        for (let i = 0; i < (idsArr.length > 5 ? 5 : idsArr.length); i++) { // max 5 btns in a raw
-            btns.push(new ButtonBuilder()
-                .setCustomId(idsArr[i])
-                .setEmoji(emojisArr[i])
-                .setStyle(stylesArr[i]));
-
-            if (labelsArr[i].length > 0) btns[i].setLabel(labelsArr[i]);
+        if (this.tail) {
+            this.tail.next = newNode;
         }
-    
-        idsArr.splice(0, 5);
-        labelsArr.splice(0, 5);
-        emojisArr.splice(0, 5);
-        stylesArr.splice(0, 5);
-        rows.push(new ActionRowBuilder().addComponents(...btns));
-    
-        if (idsArr.length > 0) return this.createBtns(idsArr, labelsArr, emojisArr, stylesArr, rows);
-        else return rows;
+  
+        newNode.prev = this.tail;
+        this.tail = newNode;
+
+        if (!this.head) {
+            this.head = newNode;
+        }
+
+        return this;
     }
 
-    static createOkNoBtns(okId, noId) {
-        return this.createBtns([okId, noId], ['', ''], ['✔️', '✖️'], [ButtonStyle.Success, ButtonStyle.Danger], []);
+    fromArray(arr) {
+        arr.forEach(el => this.append(el));
+
+        return this;
     }
 
-    static async disableBtns(msg) {
-        let btns = [], rows = [];
-    
-        msg.components.forEach(btnsRow => {
-            btnsRow.components.forEach(btn => {
-                btn = ButtonBuilder.from(btn);
-                btn.setDisabled(true);
-                btns.push(btn);
-            });
-            rows.push(new ActionRowBuilder().addComponents(...btns));
-            btns = [];
-        });
-    
-        if (msg.content && !msg.embeds) await msg.edit({ content: msg.content, components: rows });
-        else if (!msg.content && msg.embeds) await msg.edit({ embeds: msg.embeds, components: rows });
-        else if (msg.content && msg.embeds) await msg.edit({ content: msg.content, embeds: msg.embeds, components: rows });
+    getSize() {
+        let size = 0, node = this.head;
+
+        while (node) {
+            size++;
+            node = node.next;
+        }
+
+        return size;
     }
 
+    get(phaseName) {
+        let node = this.head;
+
+        while (node) {
+            if (node.name === phaseName) return node;
+            node = node.next;
+        }
+
+        return null;
+    }
+
+    getByParam(paramName) {
+        let node = this.head;
+
+        while (node) {
+            if (node.param === paramName) return node;
+            node = node.next;
+        }
+
+        return null;
+    }
+
+    getFirst() {
+        return this.head;
+    }
+
+    getLast() {
+        return this.tail;
+    }
+}
+
+const creationPhases = new PhasesList();
+const registrationPhases = new PhasesList();
+
+
+const creationPhasesData = [
+    { id: 0, name: 'eventName',         param: 'eventName',     regExp: /\D/ },
+    { id: 1, name: 'rewardName',        param: 'rewardName',    regExp: /\D/,  btns: { cancel: true } },
+    { id: 2, name: 'voiceChannels',     param: 'voiceChannels', regExp: /\d+/g, btns: { cancel: true } },
+    { id: 3, name: 'confirmInfo_event', param: '',                             btns: { edit: true, okNo: true }, embed: { creatorFunc: 'createSettingsForm', args: [] } },
+];
+
+const registrationPhasesData = [
+    { id: 0, name: 'langChoice_reg',    param: 'lang',                   btns: { lang: true } },
+    { id: 1, name: 'clanName_reg',      param: 'clanName', regExp: /\D/, btns: { cancel: true } },
+    { id: 2, name: 'confirmInfo_reg',   param: '',                       btns: { edit: true, okNo: true }, embed: { creatorFunc: 'createInfoForm', args: [] } },
+    { id: 3, name: 'awaitDecision_reg', param: '' },
+];
+
+
+creationPhases.fromArray(creationPhasesData);
+registrationPhases.fromArray(registrationPhasesData);
+
+
+class Registration extends Dialog {
+    static phases = registrationPhases;
 
     constructor(member) {
+        super();
         this.id = member.id;
         this.channel = null;
-        this.phase = 0;
+        this.lastBotMsg = null;        
+        this.lang = 'eng'; // !! мб занести в параметры? можно передавать админам
+        this.params = new Map([ ['clanName', ''] ]);
+        this.curPhase = Registration.phases.head;
     }
 
     async create(member) {
         let permissions = [
             {
                 id: member.id,
-                allow: ['VIEW_CHANNEL', 'SEND_MESSAGES', 'READ_MESSAGE_HISTORY'],
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
             },
             {
                 id: '911932147948990535', // bot's permissions
-                allow: ['VIEW_CHANNEL'],
+                allow: [PermissionFlagsBits.ViewChannel],
             },
             {
                 id: member.guild.roles.everyone,
-                deny: ['VIEW_CHANNEL'],
+                deny: [PermissionFlagsBits.ViewChannel],
             },
         ];
 
         let parent = await member.guild.channels.fetch('416584939413438475'); // категория "информация"
-        this.channel = await member.guild.channels.create(`❗${member.user.username} registration`, { type: 'GUILD_TEXT', parent: parent, permissionOverwrites: permissions });
+        this.channel = await member.guild.channels.create({ name: `❗${member.user.username} registration`, type: ChannelType.GuildText, parent: parent, permissionOverwrites: permissions });
 
-        await member.roles.add('411968125869752340'); // ambassador
+        await this.startPhase(this.curPhase);
+    }
+
+    async onClickLangBtn(interaction) {
+        await utils.disableBtns(this.lastBotMsg);
+        this.lang = interaction.customId;
+        await this.startNextPhase(interaction);
+    }
+
+    async onConfirmInfo(interaction) {
+        await utils.disableBtns(this.lastBotMsg);
+        await this.startNextPhase(interaction);
+
+        // !! mb move to phase and check in startPhase func
+
+        await this.channel.permissionOverwrites.edit(this.id, { SendMessages: false });
+        let regChannel = await interaction.guild.channels.fetch('767326891291049994'); // !! id changed to test
+        await regChannel.send({ embeds: [await this.createInfoForm(true)], components: utils.createOkNoBtns('confirm', 'deny') });
+        // this.lastBotMsg = await interaction.reply(phrases[this.curPhase.name][this.lang]);
+    }
+
+    async onDenyInfo(interaction) {
+        await utils.disableBtns(this.lastBotMsg);
+        this.clearParams();
+        await this.startFirstPhase(interaction);
+    }
+
+    async createInfoForm(toAdmins) {
+        let fields = [];
+
+        this.params.forEach( (value, key) => {
+            fields.push({
+                name: phrases[`${key}_param_description`][toAdmins ? 'ru' : this.lang] + (toAdmins ? ':' : ` [${fields.length + 1}]:`),
+                value: value
+            });
+        });
+
+        let tMember = await this.channel.guild.members.fetch(this.id);
+
+        if (toAdmins) {
+            fields.push(
+                { name: phrases.discord_param_description[this.lang], value: `${tMember.user.tag} <@${this.id}>` },
+                { name: phrases.id_param_description[this.lang],      value: `${this.id}` },
+            );
+        }
+
+        return {
+            title: phrases[`title_reg${toAdmins ? '_to_admins' : ''}`][this.lang],
+            fields,
+            footer: { text: 'Hawkband Clan' },
+            thumbnail: { url: tMember.displayAvatarURL() },
+            timestamp: new Date().toISOString(),
+            color: 0xe74c3c,
+        };    
+    }
+
+    async onLeaveGuild() {
+
     }
 }
 
 
-class EventCreation {
-    constructor() {
-        this.creatorId = ''; // msg.author.id;
-        this.phase = 0;
-        this.eventName = '';
-        this.rewardName = '';
-        this.voiceChannels = '';
+class EventCreation extends Dialog {
+    static phases = creationPhases;
+
+    constructor(msg) {
+        super();
+        this.creatorId = msg.author.id;
+        this.channel = msg.channel;
+        this.lastBotMsg = null;
+        this.lang = 'ru';
+        this.params = new Map([ ['eventName', ''], ['rewardName', ''], ['voiceChannels', ''] ]);
+        this.curPhase = EventCreation.phases.head;
     }
 
     async begin() {
-        await msg.channel.send('Процесс создания ивента запущен!');
-        await msg.channel.send('Название ивента:');
+        await this.channel.send('Процесс создания ивента запущен!');
+        await this.startPhase(this.curPhase);
+    }
+
+    createSettingsForm() {
+        let fields = [];
+
+        this.params.forEach( (value, key) => {
+            fields.push({
+                name: phrases[`${key}_param_description`][this.lang] + ` [${fields.length + 1}]:`,
+                value: value
+            });
+        });
+
+        return {
+            title: phrases.title_event_creation[this.lang],
+            fields,
+            footer: { text: 'Hawkband Clan' },
+            thumbnail: { url: this.channel.guild.iconURL() },
+            timestamp: new Date().toISOString(),
+            color: 0xe74c3c,
+        };
+    }
+
+    async onConfirm(interaction) {
+        // let textChannel = await interaction.guild.channels.fetch('411948808457682954');
+        // let regChannel = await interaction.guild.channels.fetch('819486790531809310');
+        // let infoChannel = await interaction.guild.channels.fetch('786499159679041536');
+        // let eventCategory = await interaction.guild.channels.fetch('786495165731831818');
+
+        // await regChannel.send(`**Открыта регистрация на ивент "${eventSettings.eventName}"**`);
+        // await eventCategory.setName(eventSettings.eventName);
+        // await interaction.guild.roles.create({
+        //     name: `♠️ ${eventSettings.rewardName} ♠️`,
+        //     color: 'AQUA',
+        //     position: 4 // !! уточнить позицию
+        // });
+
+        // let inviteURL = await infoChannel.createInvite({
+        //     maxAge: 0
+        // });
+
+        // await textChannel.send(inviteURL.toString());
+
+        let inviteURL = { code: 'test' };
+
+        await interaction.editReply(`Ивент **${this.params.get('eventName')}** успешно создан! Специальная ссылка-приглашение: ${inviteURL.code}`);
+
+        const connection = await mysql.createConnection(mysqlConfig); // voiceChannels - make a json
+        await connection.execute(`INSERT INTO event_settings (eventName, rewardName, inviteCode, voiceChannels) VALUES ('${this.params.get('eventName')}', '${this.params.get('rewardName')}', '${inviteURL.code}', '${this.params.get('voiceChannels')}')`);
+        await connection.end();  
+
+        await utils.disableBtns(interaction.message); // !! lastBotMsg ?
+    }
+
+    async onDeny(interaction) {
+        await interaction.editReply('Создание ивента было отменено.');
+        await utils.disableBtns(interaction.message); // !! lastBotMsg ?
+    }
+
+    async onAnswer(msg) {
+        let curPhaseName = this.curPhase.name, regExp = this.curPhase.regExp;
+
+        await super.onAnswer(msg);
+        
+        if (curPhaseName === 'voiceChannels' && this.isCorrectAnswer(msg.content)) {
+            let channelsIds = this.getChannelsIdsFromAnswer(msg.content).join(' | ');
+            this.params.set(curPhaseName, channelsIds);
+        }
+    }
+
+    getChannelsIdsFromAnswer(answer) {
+        return answer.match(/\d+/g);
+    }
+
+    isCorrectAnswer(answer) {
+        let res = super.isCorrectAnswer(answer);
+
+        if (res && this.curPhase.name === 'voiceChannels') {
+            let channelsIds = answer.match(this.curPhase.regExp), guildChannels = this.channel.guild.channels.cache;
+
+            for (let i = 0; i < channelsIds.length; i++) {
+                if (!guildChannels.has(channelsIds[i]) || guildChannels.get(channelsIds[i]).type !== 2) { res = false; break; }
+            }
+        }
+
+        return res;
     }
 }
 
@@ -508,6 +708,8 @@ async function f8(reaction, user, registrationUsers) {
 
 
 module.exports = {
+    EventCreation,
+    Registration,
     createRegistration: createRegistration,
     onConfirmSettings: onConfirmSettings,
     onDenySettings: onDenySettings,
