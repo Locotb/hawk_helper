@@ -118,6 +118,8 @@ robot.on('interactionCreate', async interaction => {
             return;
         }
 
+        await interaction.deferReply();
+
         if (interaction.customId === 'confirm') { await eventCreation.onConfirm(interaction); eventSettings.isEventNow = true; eventCreation = null; }
         else if (interaction.customId === 'deny') { await eventCreation.onDeny(interaction); eventCreation = null }
         else if (interaction.customId === 'eventName' || interaction.customId === 'rewardName' || interaction.customId === 'voiceChannels') await eventCreation.startEdit(interaction);
