@@ -123,7 +123,7 @@ robot.on('interactionCreate', async interaction => {
         if (interaction.customId === 'confirm') { await eventCreation.onConfirm(interaction); eventSettings.isEventNow = true; eventCreation = null; }
         else if (interaction.customId === 'deny') { await eventCreation.onDeny(interaction); eventCreation = null }
         else if (interaction.customId === 'eventName' || interaction.customId === 'rewardName' || interaction.customId === 'voiceChannels') await eventCreation.startEdit(interaction);
-        else if (interaction.customId === 'cancel_event') await eventCreation.onClickCancel(interaction);
+        else if (interaction.customId === 'cancel') await eventCreation.onClickCancel(interaction);
     }
     else if (interaction.isButton() && verificationUsers[0]) { // !! доработать проверку
         //let thisVerUser = verificationUsers.find(verUser => verUser.userId === interaction.member.id); work version
